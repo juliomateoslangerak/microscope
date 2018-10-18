@@ -757,6 +757,8 @@ class SerialDeviceMixIn(object):
     TODO: add more logic to handle the code duplication of serial
     devices.
     """
+    __metaclass__ = abc.ABCMeta
+
     def __init__(self, *args, **kwargs):
         super(SerialDeviceMixIn, self).__init__(*args, **kwargs)
         ## TODO: We should probably construct the connection here but
@@ -779,6 +781,11 @@ class SerialDeviceMixIn(object):
         if a device requires a specific format.
         """
         return self.connection.write(command + b'\r\n')
+
+    @abc.abstractmethod
+    def is_alive(self):
+        """Query if device is alive and we can send messages."""
+        pass
 
     @staticmethod
     def lock_comms(func):
@@ -919,6 +926,11 @@ class LaserDevice(Device):
         pass
 
     @abc.abstractmethod
+    def get_min_power_mw(self):
+        """Return the min power in mW."""
+        pass
+
+    @abc.abstractmethod
     def get_max_power_mw(self):
         """Return the max. power in mW."""
         pass
@@ -951,6 +963,7 @@ class LaserDevice(Device):
         Returns:
             void
         """
+        mw = max(min(mw, self.get_max_power_mw()), self.get_min_power_mw())
         self._set_point = mw
         self._set_power_mw(mw)
 
