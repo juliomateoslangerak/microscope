@@ -31,24 +31,25 @@ import logging
 import time
 from ast import literal_eval
 from collections import OrderedDict
-from six import string_types
 from threading import Thread
 import threading
 import Pyro4
 import numpy
+import queue
 
-from six.moves import queue
-from enum import Enum
-
-from six import iteritems
+from enum import Enum, EnumMeta
 
 import numpy
 
+from collections import namedtuple
+# A tuple that defines a region of interest.
+Roi = namedtuple('Roi', ['left', 'top', 'width', 'height'])
+# A tuple containing parameters for horizontal and vertical binning.
+Binning = namedtuple('Binning', ['h', 'v'])
+
+
 # Trigger types.
 (TRIGGER_AFTER, TRIGGER_BEFORE, TRIGGER_DURATION, TRIGGER_SOFT) = range(4)
-
-# Device types.
-(UGENERIC, USWITCHABLE, UDATA, UCAMERA, ULASER, UFILTER) = range(6)
 
 # Mapping of setting data types to descriptors allowed-value description types.
 # For python 2 and 3 compatibility, we convert the type into a descriptor string.
@@ -57,8 +58,9 @@ import numpy
 DTYPES = {'int': ('int', tuple),
           'float': ('float', tuple),
           'bool': ('bool', type(None)),
-          'enum': ('enum', list),
+          'enum': ('enum', list, EnumMeta),
           'str': ('str', int),
+          'tuple': ('tuple', type(None)),
           int: ('int', tuple),
           float: ('float', tuple),
           bool: ('bool', type(None)),
