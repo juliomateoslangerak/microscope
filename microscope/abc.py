@@ -863,6 +863,10 @@ class Camera(TriggerTargetMixin, DataDevice):
         }[flips](data)
         return super()._process_data(data)
 
+    def get_shuttering_mode(self):
+        """Return the electronic shuttering mode."""
+        pass
+
     def get_transform(self) -> typing.Tuple[bool, bool, bool]:
         """Return the current transform without readout transform."""
         return self._client_transform
