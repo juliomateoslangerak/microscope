@@ -17,14 +17,11 @@
 ## You should have received a copy of the GNU General Public License
 ## along with Microscope.  If not, see <http://www.gnu.org/licenses/>.
 
-import io
-import string
-import threading
 import logging
+import time
 
 import serial
 
-import microscope
 import microscope.abc
 
 _logger = logging.getLogger(__name__)
@@ -47,12 +44,10 @@ ERROR_CODES = {0: "OK, no error",
                12: "Out of Range (e.g. stage has been instructed to move beyond its travel range)",
                13: "Over Current error"
                }
-PULSES_PER_MM = 2048
 
 
 class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceMixin):
     """Implements interface for Thorlabs ELL Multi-Position Sliders with Resonant Piezoelectric Motors.
-
     """
 
     def __init__(self, com, baud=9600, timeout=2.0, address=0, **kwargs):
@@ -72,7 +67,6 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
             bytesize=serial.EIGHTBITS,
             parity=serial.PARITY_NONE,
         )
-        self._comms_lock = threading.RLock()
 
         # Getting information about hte device
         self._write(self.address + b"in")
@@ -81,8 +75,8 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
         self.travel = int(info[21:25], 16)
         self.pulses_per_unit = int(info[25:33], 16)
 
-        _logger.info(f"Connected to slider: s/n{info[5:13]}")
-        position_count = MODEL_TO_NR_POSITIONS[info[3:5].deccode()]
+        _logger.info(f"Connected to slider: s/n: {info[5:13]}")
+        position_count = MODEL_TO_NR_POSITIONS[info[3:5]]
 
         # Slider has to be initialized
         self.initialize()
@@ -97,47 +91,31 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
                 f"Failed to initialize: {ERROR_CODES[int(reply[3:].decode())]}"
             )
         else:
-            self._write(self.address + b"ho")
+            self._home_device()
+
+    def _home_device(self) -> None:
+        _logger.info("Homing slider")
+        self._write(self.address + b"ho")
+        while self._readline() != (self.address + b"PO00000000"):
+            time.sleep(0.01)
 
     def _do_shutdown(self) -> None:
         pass
 
+    @microscope.abc.SerialDeviceMixin.lock_comms
     def _do_set_position(self, new_position: int) -> None:
         pulses = new_position * self.travel * self.pulses_per_unit
         pulses = hex(pulses)[2:].zfill(8).encode()
 
         self._write(self.address + b"ma" + pulses)
 
+        while self._readline()[1:3] != (self.address + b"PO"):
+            time.sleep(0.01)
 
+    @microscope.abc.SerialDeviceMixin.lock_comms
     def _do_get_position(self):
-        # Thorlabs positions start at 1, hence the -1
-        try:
-            return int(self._send_command("pos?")) - 1
-        except TypeError:
-            raise microscope.DeviceError(
-                "Unable to get position of %s", self.__class__.__name__
-            )
-
-    def _readline(self):
-        """Custom _readline to overcome limitations of the serial implementation."""
-        result = []
-        with self._lock:
-            while not result or result[-1] not in ("\n", ""):
-                char = self.connection.read()
-                # Do not allow lines to be empty.
-                if result or (char not in string.whitespace):
-                    result.append(char)
-        return "".join(result)
-
-    def _send_command(self, command):
-        """Send a command and return any result."""
-        with self._lock:
-            self.connection.write(command + self.eol)
-            response = "dummy"
-            while command not in response and ">" not in response:
-                # Read until we receive the command echo.
-                response = self._readline().strip()
-            if command.endswith("?"):
-                # Last response was the command. Next is result.
-                return self._readline().strip()
-        return None
+        self._write(self.address + b"gp")
+        position = self._readline()
+        if position[:3] == (self.address + b"PO"):
+            position = int(position[3:], 16)
+            return position
