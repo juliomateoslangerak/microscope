@@ -72,8 +72,8 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
         self._write(self.address + b"in")
         info = self._readline().decode()
 
-        self.travel = int(info[21:25], 16)
-        self.pulses_per_unit = int(info[25:33], 16)
+        self.travel = int(info[21:25], 16)  # TODO: This is 93 meaning the total travel
+        self.pulses_per_unit = int(info[25:33], 16)  # TODO: This gives 0
 
         _logger.info(f"Connected to slider: s/n: {info[5:13]}")
         position_count = MODEL_TO_NR_POSITIONS[info[3:5]]
