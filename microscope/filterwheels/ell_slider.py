@@ -65,17 +65,26 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
             timeout=timeout,
             stopbits=serial.STOPBITS_ONE,
             bytesize=serial.EIGHTBITS,
-            parity=serial.PARITY_NONE,
+            parity=serial.PARITY_NONE
         )
 
         # Getting information about hte device
         self._write(self.address + b"in")
         info = self._readline().decode()
 
-        self.travel = int(info[21:25], 16)  # TODO: This is 93 meaning the total travel
-        self.pulses_per_unit = int(info[25:33], 16)  # TODO: This gives 0
+        self.travel = int(info[21:25], 16)
+        # According to the manual you should request a movement using number of pulses but the fact is that my
+        # device responds to requesting directly to engineering units (mm for linear stages) and pulses_per_unit is 0
+        self.pulses_per_unit = int(info[25:33], 16)
+        # We are therefore using the stepjogsize as a measure of the movement units
+        self._write(self.address + b"gj")
+        self.jog_step_size = int(self._readline().decode(), 16)
+        self.serial_number = info[5:13]
+        self.manufacturing_year = info[13:17]
 
-        _logger.info(f"Connected to slider: s/n: {info[5:13]}")
+        _logger.info(f"Connected to slider: {self.address}")
+        _logger.info(f"s/n: {self.serial_number}")
+        _logger.info(f"Manufacturing year: {self.manufacturing_year}")
         position_count = MODEL_TO_NR_POSITIONS[info[3:5]]
 
         # Slider has to be initialized
@@ -104,10 +113,13 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
 
     @microscope.abc.SerialDeviceMixin.lock_comms
     def _do_set_position(self, new_position: int) -> None:
-        pulses = new_position * self.travel * self.pulses_per_unit
-        pulses = hex(pulses)[2:].zfill(8).encode()
+        if self.pulses == 0:
+            posision = new_position * self.jog_step_size
+        else:
+            position = new_position * self.jog_step_size * self.pulses_per_unit
 
-        self._write(self.address + b"ma" + pulses)
+        position = hex(position)[2:].zfill(8).encode()
+        self._write(self.address + b"ma" + position)
 
         while self._readline()[1:3] != (self.address + b"PO"):
             time.sleep(0.01)
@@ -116,6 +128,16 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
     def _do_get_position(self):
         self._write(self.address + b"gp")
         position = self._readline()
-        if position[:3] == (self.address + b"PO"):
-            position = int(position[3:], 16)
-            return position
+
+        while position[:3] != (self.address + b"PO"):
+            sleep(0.1)
+            position = self._readline()
+
+        position = int(position[3:], 16)
+        if self.pulses == 0:
+            position = position // self.jog_step_size
+        else:
+            position = position // self.pulses // self.jog_step_size
+
+        return position
+
