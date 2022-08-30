@@ -111,10 +111,29 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
         pass
 
     def _do_set_position(self, new_position: int) -> None:
-        if self.pulses == 0:
-            posision = new_position * self.jog_step_size
-        else:
-            position = new_position * self.jog_step_size * self.pulses_per_unit
+        """
+        For some reason I do not find in the documentation we have to instruct the slider to move by 1 more mm
+        An example from Thorlabs console:
+        Homing device ...
+        Tx: 0ho0
+        Rx: 0PO00000000
+        Homing device ...
+        Tx: 0ho0
+        Rx: 0PO00000000
+        Move device to 0.0 mm...
+        Tx: 0ma00000000
+        Rx: 0PO00000000
+        Move device to 32.0 mm...
+        Tx: 0ma00000020
+        Rx: 0PO0000001F
+        Move device to 64.0 mm...
+        Tx: 0ma00000040
+        Rx: 0PO0000003E
+        Move device to 96.0 mm...
+        Tx: 0ma00000060
+        Rx: 0PO0000005D
+        """
+        position = new_position * (self.jog_step_size + 1)
 
         position = hex(position)[2:].zfill(8).encode()
         self._write(self.address + b"ma" + position)
@@ -131,10 +150,7 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
             position = self._readline()
 
         position = int(position[3:], 16)
-        if self.pulses == 0:
-            position = position // self.jog_step_size
-        else:
-            position = position // self.pulses // self.jog_step_size
+        position = position // self.jog_step_size
 
         return position
 
