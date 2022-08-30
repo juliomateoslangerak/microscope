@@ -247,8 +247,7 @@ class TriggerTargetMixin(metaclass=abc.ABCMeta):
     def set_trigger(
         self, ttype: microscope.TriggerType, tmode: microscope.TriggerMode
     ) -> None:
-        """Set device for a specific trigger.
-        """
+        """Set device for a specific trigger."""
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -968,7 +967,7 @@ class Camera(TriggerTargetMixin, DataDevice):
         raise NotImplementedError()
 
     def get_roi(self) -> microscope.ROI:
-        """Return current ROI. """
+        """Return current ROI."""
         roi = self._get_roi()
         if self._transform[2]:
             # 90 degree rotation
@@ -1023,8 +1022,7 @@ class SerialDeviceMixin(metaclass=abc.ABCMeta):
         self._comms_lock = threading.RLock()
 
     def _readline(self) -> bytes:
-        """Read a line from connection without leading and trailing whitespace.
-        """
+        """Read a line from connection without leading and trailing whitespace."""
         return self.connection.readline().strip()
 
     def _write(self, command: bytes) -> int:
@@ -1406,7 +1404,7 @@ class Stage(Device, metaclass=abc.ABCMeta):
     .. code-block:: python
 
         stage = SomeStageDevice()
-        stage.enable() # may trigger a stage move
+        stage.enable()  # may trigger a stage move
 
         # move operations
         stage.move_to({'x': 42.0, 'y': -5.1})
@@ -1457,7 +1455,7 @@ class Stage(Device, metaclass=abc.ABCMeta):
 
     Some stages need to find a reference position, home, before being
     able to be moved.  If required, this happens automatically during
-    :func:`enable`.
+    :func:`enable` (see also :func:`may_move_on_enable`).
     """
 
     @property
@@ -1477,6 +1475,34 @@ class Stage(Device, metaclass=abc.ABCMeta):
         other special `StageAxis` instance.
         """
         raise NotImplementedError()
+
+
+    @abc.abstractmethod
+    def may_move_on_enable(self) -> bool:
+        """Whether calling :func:`enable` is likely to make the stage move.
+
+        Most stages need to be driven to their limits at startup to
+        find a repeatable zero position and sometimes to find their
+        limits as well.  This is typically called "homing".
+
+        Stages that need to "home" differ on how often they need it
+        but they only do it during :func:`enable`.  They may need to
+        move each time `enable` is called, the first time after the
+        `Stage` object has been created, or even only the first time
+        since the device was powered up.
+
+        Note the "*may*" on "may_move_on_enable".  This is because it
+        can be difficult to know for certain if `enable` will cause
+        the stage to home.  Still, knowing that the stage *may* move
+        is essential for safety.  An unexpected movement of the stage,
+        particularly large movements such as moving to the stage
+        limits, can destroy a sample on the stage --- or even worse,
+        it can damage an objective or the stage itself.  When in
+        doubt, implementations should return `True`.
+
+        """
+        raise NotImplementedError()
+
 
     @property
     def position(self) -> typing.Mapping[str, float]:
