@@ -77,11 +77,11 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
         self.pulses_per_unit = int(info[25:33], 16)
         # We are therefore using the jog_step_size as a measure of the movement units
         self._write(self.address + b"gj")
-        self.jog_step_size = int(self._readline().decode(), 16)
+        self.jog_step_size = int(self._readline()[3:], 16)
         self.serial_number = info[5:13]
         self.manufacturing_year = info[13:17]
 
-        _logger.info(f"Connected to slider: {self.address}")
+        _logger.info(f"Connected to slider: {self.address.decode()}")
         _logger.info(f"s/n: {self.serial_number}")
         _logger.info(f"Manufacturing year: {self.manufacturing_year}")
         position_count = MODEL_TO_NR_POSITIONS[info[3:5]]
