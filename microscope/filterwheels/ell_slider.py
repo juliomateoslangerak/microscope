@@ -75,7 +75,7 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
         # According to the manual you should request a movement using number of pulses but the fact is that my
         # device responds to requesting directly to engineering units (mm for linear stages) and pulses_per_unit is 0
         self.pulses_per_unit = int(info[25:33], 16)
-        # We are therefore using the stepjogsize as a measure of the movement units
+        # We are therefore using the jog_step_size as a measure of the movement units
         self._write(self.address + b"gj")
         self.jog_step_size = int(self._readline().decode(), 16)
         self.serial_number = info[5:13]
