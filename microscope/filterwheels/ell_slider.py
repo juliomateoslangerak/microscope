@@ -137,17 +137,14 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
 
         position = hex(position)[2:].zfill(8).encode()
         self._write(self.address + b"ma" + position)
+        reply = self._readline()
 
-        while self._readline()[1:3] != (self.address + b"PO"):
-            time.sleep(0.01)
+        if reply[:3] != (self.address + b"PO"):
+            raise Exception("Cannot set position")
 
     def _do_get_position(self):
         self._write(self.address + b"gp")
         position = self._readline()
-
-        while position[:3] != (self.address + b"PO"):
-            sleep(0.1)
-            position = self._readline()
 
         position = int(position[3:], 16)
         position = position // self.jog_step_size
