@@ -103,9 +103,9 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
 
     def _home_device(self) -> None:
         _logger.info("Homing slider")
-        self._write(self.address + b"ho")
-        while self._readline() != (self.address + b"PO00000000"):
-            time.sleep(0.01)
+        self._write(self.address + b"ho0")
+        if self._readline() != (self.address + b"PO00000000"):
+            raise Exception("could not home")
 
     def _do_shutdown(self) -> None:
         pass
