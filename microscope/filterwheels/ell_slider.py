@@ -18,7 +18,6 @@
 ## along with Microscope.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
-import time
 
 import serial
 
@@ -65,17 +64,26 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
             timeout=timeout,
             stopbits=serial.STOPBITS_ONE,
             bytesize=serial.EIGHTBITS,
-            parity=serial.PARITY_NONE,
+            parity=serial.PARITY_NONE
         )
 
         # Getting information about hte device
         self._write(self.address + b"in")
         info = self._readline().decode()
 
-        self.travel = int(info[21:25], 16)  # TODO: This is 93 meaning the total travel
-        self.pulses_per_unit = int(info[25:33], 16)  # TODO: This gives 0
+        self.travel = int(info[21:25], 16)
+        # According to the manual you should request a movement using number of pulses but the fact is that my
+        # device responds to requesting directly to engineering units (mm for linear stages) and pulses_per_unit is 0
+        self.pulses_per_unit = int(info[25:33], 16)
+        # We are therefore using the jog_step_size as a measure of the movement units
+        self._write(self.address + b"gj")
+        self.jog_step_size = int(self._readline()[3:], 16)
+        self.serial_number = info[5:13]
+        self.manufacturing_year = info[13:17]
 
-        _logger.info(f"Connected to slider: s/n: {info[5:13]}")
+        _logger.info(f"Connected to slider: {self.address.decode()}")
+        _logger.info(f"s/n: {self.serial_number}")
+        _logger.info(f"Manufacturing year: {self.manufacturing_year}")
         position_count = MODEL_TO_NR_POSITIONS[info[3:5]]
 
         # Slider has to be initialized
@@ -95,27 +103,51 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
 
     def _home_device(self) -> None:
         _logger.info("Homing slider")
-        self._write(self.address + b"ho")
-        while self._readline() != (self.address + b"PO00000000"):
-            time.sleep(0.01)
+        self._write(self.address + b"ho0")
+        if self._readline() != (self.address + b"PO00000000"):
+            raise Exception("could not home")
 
     def _do_shutdown(self) -> None:
         pass
 
-    @microscope.abc.SerialDeviceMixin.lock_comms
     def _do_set_position(self, new_position: int) -> None:
-        pulses = new_position * self.travel * self.pulses_per_unit
-        pulses = hex(pulses)[2:].zfill(8).encode()
+        """
+        For some reason I do not find in the documentation we have to instruct the slider to move by 1 more mm
+        An example from Thorlabs console:
+        Homing device ...
+        Tx: 0ho0
+        Rx: 0PO00000000
+        Homing device ...
+        Tx: 0ho0
+        Rx: 0PO00000000
+        Move device to 0.0 mm...
+        Tx: 0ma00000000
+        Rx: 0PO00000000
+        Move device to 32.0 mm...
+        Tx: 0ma00000020
+        Rx: 0PO0000001F
+        Move device to 64.0 mm...
+        Tx: 0ma00000040
+        Rx: 0PO0000003E
+        Move device to 96.0 mm...
+        Tx: 0ma00000060
+        Rx: 0PO0000005D
+        """
+        position = new_position * (self.jog_step_size + 1)
 
-        self._write(self.address + b"ma" + pulses)
+        position = hex(position)[2:].zfill(8).encode()
+        self._write(self.address + b"ma" + position)
+        reply = self._readline()
 
-        while self._readline()[1:3] != (self.address + b"PO"):
-            time.sleep(0.01)
+        if reply[:3] != (self.address + b"PO"):
+            raise Exception("Cannot set position")
 
-    @microscope.abc.SerialDeviceMixin.lock_comms
     def _do_get_position(self):
         self._write(self.address + b"gp")
         position = self._readline()
-        if position[:3] == (self.address + b"PO"):
-            position = int(position[3:], 16)
-            return position
+
+        position = int(position[3:], 16)
+        position = position // self.jog_step_size
+
+        return position
+
