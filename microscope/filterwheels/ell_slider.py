@@ -110,7 +110,6 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
     def _do_shutdown(self) -> None:
         pass
 
-    @microscope.abc.SerialDeviceMixin.lock_comms
     def _do_set_position(self, new_position: int) -> None:
         if self.pulses == 0:
             posision = new_position * self.jog_step_size
@@ -123,7 +122,6 @@ class ThorlabsELLSlider(microscope.abc.FilterWheel, microscope.abc.SerialDeviceM
         while self._readline()[1:3] != (self.address + b"PO"):
             time.sleep(0.01)
 
-    @microscope.abc.SerialDeviceMixin.lock_comms
     def _do_get_position(self):
         self._write(self.address + b"gp")
         position = self._readline()
