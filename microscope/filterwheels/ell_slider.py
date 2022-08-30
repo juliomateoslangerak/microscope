@@ -18,7 +18,6 @@
 ## along with Microscope.  If not, see <http://www.gnu.org/licenses/>.
 
 import logging
-import time
 
 import serial
 
