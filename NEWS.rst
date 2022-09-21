@@ -13,9 +13,20 @@ Version 0.7.0 (upcoming)
     `Camera.get_trigger_type` does not return the same as
     `Camera.trigger_type` property.
 
+* Changes to device ABCs:
+
+  * The `Stage` ABC has a new method `may_move_on_enable` to hint
+    whether calling `enable` will cause the stage to move.
+
 * New devices supported:
 
   * Toptica iChrome MLE
+
+* Device specific changes:
+
+  * `PVCamera`: in version 0.6.0 the default PVCAM trigger mode was
+    accidentally changed from "strobed" to "trig. first".  This has
+    now been reversed.
 
 * The device server logging was broken in version 0.6.0 for Windows
   and macOS (systems not using fork for multiprocessing).  This
