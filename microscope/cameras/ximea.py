@@ -63,6 +63,7 @@ import typing
 
 import numpy as np
 from ximea import xiapi
+from ximea.xidefs import XI_GPO_MODE
 
 import microscope
 import microscope.abc
@@ -201,10 +202,17 @@ class XimeaCamera(microscope.abc.Camera):
         # makes it work with the rest of enums which are there to make
         # it work with TriggerTargetMixin.
         trg_source_names = [x.name for x in TrgSourceMap]
+        gpo_modes = [k for k, _ in XI_GPO_MODE.items()]
 
         def _trigger_source_setter(index: int) -> None:
             trigger_mode = TrgSourceMap[trg_source_names[index]].value
             self.set_trigger(trigger_mode, self.trigger_mode)
+
+        def _gpo_mode_setter(mode: str) -> None:
+            self._handle.set_gpo_mode(mode)
+
+        def _gpo_mode_getter() -> str:
+            return self._handle.get_gpo_mode()
 
         self.add_setting(
             "trigger source",
@@ -212,6 +220,14 @@ class XimeaCamera(microscope.abc.Camera):
             lambda: TrgSourceMap(self.trigger_type).name,
             _trigger_source_setter,
             trg_source_names,
+        )
+
+        self.add_setting(
+            "GPO_mode",
+            "enum",
+            _gpo_mode_getter,
+            _gpo_mode_setter,
+            gpo_modes
         )
 
         self.initialize()
@@ -297,6 +313,8 @@ class XimeaCamera(microscope.abc.Camera):
         self.set_trigger(
             microscope.TriggerType.SOFTWARE, microscope.TriggerMode.ONCE
         )
+
+        self._handle.set_gpo_mode("XI_GPO_EXPOSURE_ACTIVE")
 
         # Add settings for the different temperature sensors.
         for temp_param_name in [
