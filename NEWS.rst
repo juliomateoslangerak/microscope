@@ -31,6 +31,9 @@ Version 0.7.0 (upcoming)
   * All filterwheels had a ``"position"`` setting which was redundant
     with the related get/set methods.  The setting was been removed.
 
+  * Cameras now have a property ``"shuttering_mode"`` for the type of
+    electronic shuttering mode (global or rolling).
+
 * New devices supported:
 
   * Hamamatsu cameras (:class:`microscope.cameras.hamamatsu.HamamatsuCamera`)
