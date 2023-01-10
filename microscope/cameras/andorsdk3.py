@@ -605,11 +605,8 @@ class AndorSDK3(
     def _do_trigger(self) -> None:
         self._software_trigger()
 
-    def get_shuttering_mode(self):
+    def _get_shuttering_mode(self):
         return SDK3_STRING_TO_SHUTTERING_MODE[self._electronic_shuttering_mode.get_string().lower()]
-
-    def set_shuttering_mode(self, mode):
-        raise NotImplementedError
 
     def _get_binning(self):
         as_text = self._aoi_binning.get_string().split("x")
