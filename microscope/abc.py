@@ -873,7 +873,7 @@ class Camera(TriggerTargetMixin, DataDevice):
         """Return the electronic shuttering mode."""
         pass
 
-    @property.setter
+    @shuttering_mode.setter
     def shuttering_mode(self, mode: microscope.ElectronicShutteringMode):
         """Set the electronic shuttering mode."""
         self._set_shuttering_mode(mode)
