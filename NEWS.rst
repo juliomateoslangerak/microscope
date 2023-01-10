@@ -44,6 +44,8 @@ Version 0.7.0 (upcoming)
 
   * Toptica iChrome MLE (:class:`microscope.controllers.toptica.iChromeMLE`)
 
+  * Thorlabs ELL sliders (:class:`microscope.filterwheels.ell_slider.ThorlabsELLSlider`)
+
 * Device specific changes:
 
   * `PVCamera`:
