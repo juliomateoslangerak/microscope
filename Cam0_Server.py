@@ -1,6 +1,5 @@
 """Configuration file for deviceserver.
 """
-
 from microscope.devices import device
 
 # Import required device classes
@@ -13,21 +12,33 @@ from microscope.cameras.andorsdk3 import AndorSDK3
 # then it will be the IP address on that network.
 host = '10.6.19.30'
 
-# Each element in the DEVICES list identifies a device that will be
-# served on the network.  Each device is defined like so:
 #
-# device(cls, host, port, conf)
-#     cls: class of the device that will be served
-#     host: ip or hostname where the device will be accessible.
-#         This will be the same value for all devices.
-#     port: port number where the device will be accessible.
-#         Each device must have its own port.
-#     conf: a dict with the arguments to construct the device
-#         instance.  See the individual class documentation.
+# def construct_camera_0() -> typing.Dict[str, device]:
+#     camera = AndorSDK3()
+#     camera.set_setting("trigger_mode", "External Exposure")
+#     return {"camera_0": camera}
 #
-
+#
 DEVICES = [
     device(AndorSDK3, host, 8001, uid="VSC-01604")  # {'transform': (0, 1, 1)}),  # timeout=1, buffer_length=, index=0,
     # device(TestCamera, host, 8005, otherargs=1,),
     # device(TestCamera, host, 8006, otherargs=1,),
     ]
+# from microscope.device_server import device
+# from microscope.simulators import SimulatedCamera, SimulatedFilterWheel
+#
+# def construct_camera():
+#     camera = SimulatedCamera()
+#     camera.set_setting("display image number", False)
+#     return {'name': camera}
+#
+# def construct_device():
+#     d = SimulatedFilterWheel(positions=6)
+#     return {"device": d}
+#
+# DEVICES = [
+#     device(construct_camera, host="127.0.0.1", port=8000),
+#     device(construct_device, host="127.0.0.1", port=8001),
+    # device(SimulatedCamera, host="127.0.0.1", port=8001),
+# ]
+#
