@@ -29,7 +29,6 @@ import queue
 import threading
 import time
 import typing
-from ast import literal_eval
 from enum import EnumMeta
 from threading import Thread
 
@@ -255,7 +254,7 @@ class TriggerTargetMixin(metaclass=abc.ABCMeta):
         """Actual trigger of the device.
 
         Classes implementing this interface should implement this
-        method instead of `trigger`.
+        method instead of :meth:`trigger`.
 
         """
         raise NotImplementedError()
@@ -264,14 +263,14 @@ class TriggerTargetMixin(metaclass=abc.ABCMeta):
         """Trigger device.
 
         The actual effect is device type dependent.  For example, on a
-        `Camera` it triggers image acquisition while on a
+        ``Camera`` it triggers image acquisition while on a
         `DeformableMirror` it applies a queued pattern.  See
         documentation for the devices implementing this interface for
         details.
 
         Raises:
             microscope.IncompatibleStateError: if trigger type is not
-                set to `TriggerType.SOFTWARE`.
+                set to ``TriggerType.SOFTWARE``.
 
         """
         if self.trigger_type is not microscope.TriggerType.SOFTWARE:
@@ -605,25 +604,29 @@ class DataDevice(Device, metaclass=abc.ABCMeta):
             self.enabled = False
             raise err
         if not result:
+            _logger.warning("Failed to enable but no error was raised")
             self.enabled = False
         else:
             self.enabled = True
-            # Set up data fetching
             if self._using_callback:
+                _logger.debug("Setup with callback, disabling fetch thread")
                 if self._fetch_thread:
                     self._fetch_thread_run = False
             else:
+                _logger.debug("Setting up fetch thread")
                 if not self._fetch_thread or not self._fetch_thread.is_alive():
                     self._fetch_thread = Thread(target=self._fetch_loop)
                     self._fetch_thread.daemon = True
                     self._fetch_thread.start()
-            if (
-                not self._dispatch_thread
-                or not self._dispatch_thread.is_alive()
-            ):
+
+            if self._dispatch_thread and self._dispatch_thread.is_alive():
+                _logger.debug("Found live dispatch thread.")
+            else:
+                _logger.debug("Setting up dispatch thread")
                 self._dispatch_thread = Thread(target=self._dispatch_loop)
                 self._dispatch_thread.daemon = True
                 self._dispatch_thread.start()
+
             _logger.debug("... enabled.")
 
     def disable(self) -> None:
@@ -635,8 +638,10 @@ class DataDevice(Device, metaclass=abc.ABCMeta):
         self.enabled = False
         if self._fetch_thread:
             if self._fetch_thread.is_alive():
+                _logger.debug("Found fetch thread alive. Joining.")
                 self._fetch_thread_run = False
                 self._fetch_thread.join()
+            _logger.debug("Fetch thread is dead.")
         super().disable()
 
     @abc.abstractmethod
@@ -651,7 +656,7 @@ class DataDevice(Device, metaclass=abc.ABCMeta):
         data is available, return `None`.
 
         """
-        return None
+        raise NotImplementedError()
 
     def _process_data(self, data):
         """Do any data processing and return data."""
@@ -659,6 +664,7 @@ class DataDevice(Device, metaclass=abc.ABCMeta):
 
     def _send_data(self, client, data, timestamp):
         """Dispatch data to the client."""
+        _logger.debug("sending data to client")
         try:
             # Cockpit will send a client with receiveData and expects
             # two arguments (data and timestamp).  But we really want
@@ -684,8 +690,10 @@ class DataDevice(Device, metaclass=abc.ABCMeta):
     def _dispatch_loop(self) -> None:
         """Process data and send results to any client."""
         while True:
+            _logger.debug("Getting data from dispatch buffer")
             client, data, timestamp = self._dispatch_buffer.get(block=True)
             if client not in self._liveClients:
+                _logger.debug("Client not in liveClients so ignoring data.")
                 continue
             err = None
             if isinstance(data, Exception):
@@ -712,6 +720,7 @@ class DataDevice(Device, metaclass=abc.ABCMeta):
         self._fetch_thread_run = True
 
         while self._fetch_thread_run:
+            _logger.debug("Fetching data from device.")
             try:
                 data = self._fetch_data()
             except Exception as e:
@@ -722,10 +731,12 @@ class DataDevice(Device, metaclass=abc.ABCMeta):
                 self._put(e, timestamp)
                 data = None
             if data is not None:
+                _logger.debug("Fetch data to be put into dispatch buffer.")
                 # TODO Add support for timestamp from hardware.
                 timestamp = time.time()
                 self._put(data, timestamp)
             else:
+                _logger.debug("Fetched no data from device.")
                 time.sleep(0.001)
 
     @property
@@ -824,14 +835,8 @@ class Camera(TriggerTargetMixin, DataDevice):
 
     """
 
-    ALLOWED_TRANSFORMS = [p for p in itertools.product(*3 * [[False, True]])]
-
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        # A list of readout mode descriptions.
-        self._readout_modes = ["default"]
-        # The index of the current readout mode.
-        self._readout_mode = 0
         # Transforms to apply to data (fliplr, flipud, rot90)
         # Transform to correct for readout order.
         self._readout_transform = (False, False, False)
@@ -839,21 +844,6 @@ class Camera(TriggerTargetMixin, DataDevice):
         self._client_transform = (False, False, False)
         # Result of combining client and readout transforms
         self._transform = (False, False, False)
-        # A transform provided by the client.
-        self.add_setting(
-            "transform",
-            "enum",
-            lambda: Camera.ALLOWED_TRANSFORMS.index(self._transform),
-            lambda index: self.set_transform(Camera.ALLOWED_TRANSFORMS[index]),
-            Camera.ALLOWED_TRANSFORMS,
-        )
-        self.add_setting(
-            "readout mode",
-            "enum",
-            lambda: self._readout_mode,
-            self.set_readout_mode,
-            lambda: self._readout_modes,
-        )
         self.add_setting("roi", "tuple", self.get_roi, self.set_roi, None)
 
     def _process_data(self, data):
@@ -873,39 +863,29 @@ class Camera(TriggerTargetMixin, DataDevice):
         }[flips](data)
         return super()._process_data(data)
 
-    def set_readout_mode(self, description):
-        """Set the readout mode and _readout_transform."""
-        pass
-
-    def get_shuttering_mode(self):
-        """Return the electronic shuttering mode."""
-        pass
-
-    def set_shuttering_mode(self, mode):
-        """Set the electronic shuttering mode."""
-        pass
-
-    def get_transform(self):
+    def get_transform(self) -> typing.Tuple[bool, bool, bool]:
         """Return the current transform without readout transform."""
         return self._client_transform
 
-    def set_transform(self, transform):
-        """Combine provided transform with readout transform."""
-        if isinstance(transform, str):
-            transform = literal_eval(transform)
-        self._client_transform = transform
+    def _update_transform(self):
+        """Update transform (after setting the client or readout transform)."""
         lr, ud, rot = (
-            self._readout_transform[i] ^ transform[i] for i in range(3)
+            self._readout_transform[i] ^ self._client_transform[i] for i in range(3)
         )
         if self._readout_transform[2] and self._client_transform[2]:
             lr = not lr
             ud = not ud
         self._transform = (lr, ud, rot)
 
+    def set_transform(self, transform: typing.Tuple[bool, bool, bool]) -> None:
+        """Set client transform and update resultant transform."""
+        self._client_transform = transform
+        self._update_transform()
+
     def _set_readout_transform(self, new_transform):
-        """Update readout transform and update resultant transform."""
+        """Set readout transform and update resultant transform."""
         self._readout_transform = [bool(int(t)) for t in new_transform]
-        self.set_transform(self._client_transform)
+        self._update_transform()
 
     @abc.abstractmethod
     def set_exposure_time(self, value: float) -> None:
@@ -1276,16 +1256,6 @@ class FilterWheel(Device, metaclass=abc.ABCMeta):
                 "positions must be a positive number (was %d)" % positions
             )
         self._positions = positions
-        # The position as an integer.
-        # Deprecated: clients should call get_position and set_position;
-        # still exposed as a setting until cockpit uses set_position.
-        self.add_setting(
-            "position",
-            "int",
-            self.get_position,
-            self.set_position,
-            lambda: (0, self.get_num_positions()),
-        )
 
     @property
     def n_positions(self) -> int:
@@ -1294,7 +1264,7 @@ class FilterWheel(Device, metaclass=abc.ABCMeta):
 
     @property
     def position(self) -> int:
-        """Number of wheel positions (zero-based)."""
+        """Filter Wheel position (zero-based)."""
         return self._do_get_position()
 
     @position.setter
@@ -1476,7 +1446,6 @@ class Stage(Device, metaclass=abc.ABCMeta):
         """
         raise NotImplementedError()
 
-
     @abc.abstractmethod
     def may_move_on_enable(self) -> bool:
         """Whether calling :func:`enable` is likely to make the stage move.
@@ -1502,7 +1471,6 @@ class Stage(Device, metaclass=abc.ABCMeta):
 
         """
         raise NotImplementedError()
-
 
     @property
     def position(self) -> typing.Mapping[str, float]:
