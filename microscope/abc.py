@@ -867,10 +867,10 @@ class Camera(TriggerTargetMixin, DataDevice):
         """Return the current transform without readout transform."""
         return self._client_transform
 
-    def _update_transform(self, transform):
+    def _update_transform(self):
         """Update transform (after setting the client or readout transform)."""
         lr, ud, rot = (
-            self._readout_transform[i] ^ transform[i] for i in range(3)
+            self._readout_transform[i] ^ self._client_transform[i] for i in range(3)
         )
         if self._readout_transform[2] and self._client_transform[2]:
             lr = not lr
@@ -1264,7 +1264,7 @@ class FilterWheel(Device, metaclass=abc.ABCMeta):
 
     @property
     def position(self) -> int:
-        """Number of wheel positions (zero-based)."""
+        """Filter Wheel position (zero-based)."""
         return self._do_get_position()
 
     @position.setter
