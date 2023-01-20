@@ -62,7 +62,7 @@ import logging
 import typing
 
 import numpy as np
-from ximea import xiapi
+from ximea import xiapi, xidefs
 from ximea.xidefs import XI_GPO_MODE
 
 import microscope
@@ -277,6 +277,38 @@ class XimeaCamera(microscope.abc.Camera):
 
         Open the connection, connect properties and populate settings dict.
         """
+
+        """
+        These is what David suggested
+        
+        prm_type_to_add_method = {
+        "xiTypeEnum" : self._add_enum_prm_to_setting,
+        "xiTypeFloat" : self._add_float_prm_to_setting,
+        ...
+        }
+        for prm_name, prm_type in ximea.xidefs.VAL_TYPE.items():
+            prm_type_to_add_method[prm_type](prm_name)
+        ...
+    
+        def _add_enum_prm_to_settings(self, prm_name):
+            values: Dict[str, c_int] = ximea.xidefs.ASSOC_ENUM[prm_name] 
+            ...
+    
+        def _add_float_prm_to_settings(self, name):
+            ...
+            
+        Structure of the defs file
+        ERROR_CODES: Dict(int: error string)
+        XI_... : Dict(string enum name: cint_value)
+        XI_SWITCH: Dict(string XiType: cint_value)
+        XI_PRM_TYPE: Dict(string XiType: cint_value)
+        XI_PRM_...: string parameter name
+        VAL_TYPE Dict(str parameter names: str types from XI_PRM_TYPE)
+        ASSOC_ENUM: Dict(str par name: dict with enum options XI_...)
+         
+        
+        """
+
         n_cameras = self._handle.get_number_devices()
 
         if self._serial_number is None:
@@ -315,6 +347,31 @@ class XimeaCamera(microscope.abc.Camera):
         )
 
         self._handle.set_gpo_mode("XI_GPO_EXPOSURE_ACTIVE")
+
+        # Add settings
+        def _add_enum_prm_to_settings(name):
+            self.add_setting(
+                name=name,
+                dtype="enum",
+                get_func=self._handle.get_param,
+                set_func=self._handle.set_param,
+                values=[v for v in xidefs.ASSOC_ENUM[name].keys()]
+            )
+
+        prm_type_to_add_method = {
+            "xiTypeInteger": self._add_int_prm_to_setting,
+            "xiTypeFloat": self._add_float_prm_to_setting,
+            "xiTypeString": self._add_str_prm_to_setting,
+            "xiTypeEnum": _add_enum_prm_to_settings,
+            "xiTypeBoolean": self._add_bool_prm_to_setting,
+            "xiTypeCommand": self._add_cmd_prm_to_setting,
+            "xiTypeInteger64": self._add_int64_prm_to_setting,
+        }
+
+        for prm_name, prm_type in xidefs.VAL_TYPE.items():
+            try:
+                self._handle.get_param(prm_name)
+            prm_type_to_add_method[prm_type](prm_name)
 
         # Add settings for the different temperature sensors.
         for temp_param_name in [
