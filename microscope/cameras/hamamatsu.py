@@ -137,7 +137,7 @@ def _status_to_error(status: int) -> str:
 def _call(f: typing.Callable[..., int], *args) -> None:
     """Call a C function from dcamapi4.
 
-    This is an helper function for the most typical case of checking
+    This is a helper function for the most typical case of checking
     the return value for failure and raising an exception if so.  For
     special handling of certain codes, do it yourself.
 
@@ -464,7 +464,7 @@ class HamamatsuCamera(microscope.abc.Camera):
             elif dtype == "enum":
                 values = self._init_method_get_prop_values(prop_attr)
             else:
-                raise RuntimeError("reached imposible state")
+                raise RuntimeError("reached impossible state")
 
             # Cameras can be in BUSY, READY, STABLE, or UNSTABLE
             # state.  All writable properties are writable during
