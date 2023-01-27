@@ -81,7 +81,8 @@ _XI_NOT_SUPPORTED = 12
 _XI_NOT_IMPLEMENTED = 26
 _XI_ACQUISITION_STOPPED = 45
 _XI_UNKNOWN_PARAM = 100
-
+_XI_UNSUPPORTED_PARAM = 106
+_XI_UNSUPPORTED_INFO_PARAM = 107
 
 # During acquisition, we rely on catching timeout errors which then
 # get discarded.  However, with debug level set to warning (XiApi
@@ -428,6 +429,8 @@ class XimeaCamera(microscope.abc.Camera):
                     _XI_NOT_SUPPORTED,
                     _XI_NOT_IMPLEMENTED,
                     _XI_UNKNOWN_PARAM,
+                    _XI_UNSUPPORTED_PARAM,
+                    _XI_UNSUPPORTED_INFO_PARAM
                 ]:
                     _logger.debug(f"The setting {setting_name} failed to be added")
                     print(f"The setting {setting_name} failed to be added")
