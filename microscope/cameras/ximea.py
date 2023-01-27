@@ -429,7 +429,7 @@ class XimeaCamera(microscope.abc.Camera):
                     _XI_NOT_IMPLEMENTED,
                     _XI_UNKNOWN_PARAM,
                 ]:
-                    raise err
+                    raise err(f"The setting {setting_name} failed to be added")
 
             prm_type_to_add_method[setting_type](setting_name)
 
