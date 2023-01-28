@@ -54,6 +54,8 @@ This is only available via Ximea's website and is not available on
 PyPI.  See Ximea's website for `install instructions
 <https://www.ximea.com/support/wiki/apis/Python>`__.
 
+If installing under Linux be sure to follow the Linux installation tutorial
+<https://www.ximea.com/support/wiki/apis/XIMEA_Linux_Software_Package>__.
 """
 
 import contextlib
@@ -83,6 +85,25 @@ _XI_ACQUISITION_STOPPED = 45
 _XI_UNKNOWN_PARAM = 100
 _XI_UNSUPPORTED_PARAM = 106
 _XI_UNSUPPORTED_INFO_PARAM = 107
+
+# Some more "advanced" features of the Ximea cameras are not supported,
+# at least for the moment. These features are implemented as settings that
+# we have to "blacklist" to avoid their loading.
+_UNSUPPORTED_SETTINGS = [
+    # The device manifest provides XML data of the features supported by the camera
+    "device_manifest",
+    # Settings related to the FFS. SOme ximea camera models provide access
+    # to the Flash memory
+    "read_file_ffs",
+    "write_file_ffs",
+    "ffs_file_name",
+    "ffs_file_id",
+    "ffs_file_offset",
+    "ffs_file_size",
+    "free_ffs_size",
+    "used_ffs_size",
+    "ffs_access_key",
+]
 
 # During acquisition, we rely on catching timeout errors which then
 # get discarded.  However, with debug level set to warning (XiApi
@@ -417,13 +438,11 @@ class XimeaCamera(microscope.abc.Camera):
 
         for setting_name, setting_type in xidefs.VAL_TYPE.items():
             # TODO: Do we have to remove here the settings that are implemented in another way?
-            #
+            # ROI, exposure,...
+            if setting_name in _UNSUPPORTED_SETTINGS:
+                continue
             try:
-                if setting_name == "device_manifest":
-                    bs = 2097152
-                else:
-                    bs = 256
-                self._handle.get_param(setting_name, buffer_size=bs)
+                self._handle.get_param(setting_name)
             except xiapi.Xi_error as err:
                 # Depending on XiAPI version, camera model, and
                 # selected sensor, we might get any of these errors as
