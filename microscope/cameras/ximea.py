@@ -419,7 +419,11 @@ class XimeaCamera(microscope.abc.Camera):
             # TODO: Do we have to remove here the settings that are implemented in another way?
             #
             try:
-                self._handle.get_param(setting_name, buffer_size=2097152)
+                if setting_name == "device_manifest":
+                    bs = 2097152
+                else:
+                    bs = 256
+                self._handle.get_param(setting_name, buffer_size=bs)
             except xiapi.Xi_error as err:
                 # Depending on XiAPI version, camera model, and
                 # selected sensor, we might get any of these errors as
