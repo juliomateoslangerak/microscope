@@ -92,8 +92,8 @@ _XI_UNSUPPORTED_INFO_PARAM = 107
 _UNSUPPORTED_SETTINGS = [
     # The device manifest provides XML data of the features supported by the camera
     "device_manifest",
-    # Settings related to the FFS. SOme ximea camera models provide access
-    # to the Flash memory
+    # Settings related to the FFS. Some ximea camera models provide access
+    # to the Flash memory as a file system.
     "read_file_ffs",
     "write_file_ffs",
     "ffs_file_name",
@@ -103,6 +103,13 @@ _UNSUPPORTED_SETTINGS = [
     "free_ffs_size",
     "used_ffs_size",
     "ffs_access_key",
+    # The context list is used to get a list of settings for off-line processing
+    "xiapi_context_list",
+    # Some ximea cameras provide access to features from the sensor
+    "sensor_feature_selector",  # Selects the current feature which is accessible by XI_PRM_SENSOR_FEATURE_VALUE.
+    "sensor_feature_value",  # Allows access to sensor feature value currently selected by XI_PRM_SENSOR_FEATURE_SELECTOR.
+    "ext_feature_selector",  # Selection of extended feature.
+    "ext_feature",  # Extended feature value.
 ]
 
 # During acquisition, we rely on catching timeout errors which then
