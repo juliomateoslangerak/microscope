@@ -460,6 +460,8 @@ class XimeaCamera(microscope.abc.Camera):
                     _logger.debug(f"The setting {setting_name} failed to be added")
                     print(f"The setting {setting_name} failed to be added")
                     raise err
+                else:
+                    continue
 
             prm_type_to_add_method[setting_type](setting_name)
 
