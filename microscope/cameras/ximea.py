@@ -105,11 +105,6 @@ _UNSUPPORTED_SETTINGS = [
     "ffs_access_key",
     # The context list is used to get a list of settings for off-line processing
     "xiapi_context_list",
-    # Some ximea cameras provide access to features from the sensor
-    "sensor_feature_selector",  # Selects the current feature which is accessible by XI_PRM_SENSOR_FEATURE_VALUE.
-    "sensor_feature_value",  # Allows access to sensor feature value currently selected by XI_PRM_SENSOR_FEATURE_SELECTOR.
-    "ext_feature_selector",  # Selection of extended feature.
-    "ext_feature",  # Extended feature value.
 ]
 
 # During acquisition, we rely on catching timeout errors which then
