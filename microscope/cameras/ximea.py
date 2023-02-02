@@ -254,7 +254,7 @@ class XimeaCamera(microscope.abc.Camera):
             if getattr(err, "status", None) == _XI_TIMEOUT:
                 return None
             elif (
-                getattr(err, "status", None) == _XI_ACQUISITION_STOPED
+                getattr(err, "status", None) == _XI_ACQUISITION_STOPPED
                 and not self._acquiring
             ):
                 # We can end up here during disable if self._acquiring
