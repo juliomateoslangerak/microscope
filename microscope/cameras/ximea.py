@@ -298,7 +298,7 @@ class XimeaCamera(microscope.abc.Camera):
     def _set_int_setting(self, setting_name: str, value: int) -> None:
         self._handle.set_param(setting_name, value)
 
-    def _get_int_setting_values(self, setting_name: str) -> typing.Optional[Tuple[int, int]]:
+    def _get_int_setting_values(self, setting_name: str) -> typing.Optional[typing.Tuple[int, int]]:
         if self._is_setting_readonly(setting_name):
             return None
         else:
@@ -311,7 +311,7 @@ class XimeaCamera(microscope.abc.Camera):
     def _set_float_setting(self, setting_name: str, value: float) -> None:
         self._handle.set_param(setting_name, value)
 
-    def _get_float_setting_values(self, setting_name: str) -> typing.Optional[Tuple[float, float]]:
+    def _get_float_setting_values(self, setting_name: str) -> typing.Optional[typing.Tuple[float, float]]:
         print(setting_name)
         if self._is_setting_readonly(setting_name):
             return None
