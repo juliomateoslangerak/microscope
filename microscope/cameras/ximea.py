@@ -289,8 +289,8 @@ class XimeaCamera(microscope.abc.Camera):
         self._handle.set_param(setting_name, value)
 
     def _get_int_setting_values(self, setting_name: str) -> tuple:
-        return self._handle.get_param(f"get_{setting_name}:min"), \
-               self._handle.get_param(f"get_{setting_name}:max")
+        return self._handle.get_param(f"{setting_name}:min"), \
+               self._handle.get_param(f"{setting_name}:max")
 
     def _get_float_setting(self, setting_name: str) -> float:
         return self._handle.get_param(setting_name)
@@ -299,8 +299,8 @@ class XimeaCamera(microscope.abc.Camera):
         self._handle.set_param(setting_name, value)
 
     def _get_float_setting_values(self, setting_name: str) -> tuple:
-        return self._handle.get_param(f"get_{setting_name}:min"), \
-               self._handle.get_param(f"get_{setting_name}:max")
+        return self._handle.get_param(f"{setting_name}:min"), \
+               self._handle.get_param(f"{setting_name}:max")
 
     def _get_str_setting(self, setting_name: str) -> str:
         return self._handle.get_param(setting_name)
