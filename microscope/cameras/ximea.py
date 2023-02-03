@@ -312,7 +312,6 @@ class XimeaCamera(microscope.abc.Camera):
         self._handle.set_param(setting_name, value)
 
     def _get_float_setting_values(self, setting_name: str) -> typing.Optional[typing.Tuple[float, float]]:
-        print(setting_name)
         if self._is_setting_readonly(setting_name):
             return None
         else:
@@ -471,7 +470,6 @@ class XimeaCamera(microscope.abc.Camera):
                     _XI_UNSUPPORTED_INFO_PARAM
                 ]:
                     _logger.debug(f"The setting {setting_name} failed to be added")
-                    print(f"The setting {setting_name} failed to be added")
                     raise err
                 else:
                     continue
