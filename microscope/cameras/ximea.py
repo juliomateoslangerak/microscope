@@ -283,10 +283,10 @@ class XimeaCamera(microscope.abc.Camera):
                 raise
 
     def _is_setting_readonly(self, name):
-        """
-        As far as I see, there is no other way to see if a setting is readonly apart from trying to change it
-        if a setter function is not implemented I assume it is a permanent readonly setting
-        """
+        # As far as I see, there is no other way to see if a setting is readonly apart from trying to change it
+        # if a setter function is not implemented I assume it is a permanent readonly setting
+        # Some cameras implement the "device_manifest" setting that returns a full description of the settings as a
+        # XML file. As this is not a standard feature I prefer to stick with this "less proper" way of defining this
         if hasattr(self._handle, f"set_{name}"):
             return False
         else:
@@ -413,6 +413,8 @@ class XimeaCamera(microscope.abc.Camera):
                 get_func=lambda name=name: self._get_str_setting(name),
                 set_func=lambda v, name=name: self._set_str_setting(name, v),
                 # The value of the string size is extracted from the default buffer size of xiapi.Camera.get_param
+                # This is definitely not enough for many settings. The Ximea API fails to provide proper string size
+                # and a reference has to be found in the C library.
                 values=256,
                 readonly=lambda name=name: self._is_setting_readonly(name)
             )
