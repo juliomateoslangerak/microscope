@@ -292,37 +292,39 @@ class XimeaCamera(microscope.abc.Camera):
         else:
             return True
 
+    def _get_setting_values(self, setting_name: str) -> \
+            typing.Optional[typing.Tuple[typing.Union[int, float, None], typing.Union[int, float, None]]]:
+        if self._is_setting_readonly(setting_name):
+            return None, None
+        else:
+            try:
+                min_val = self._handle.get_param(f"{setting_name}:min")
+            except xiapi.Xi_error as err:
+                if err.status == _XI_UNKNOWN_PARAM:
+                    min_val = None
+                else:
+                    raise err
+            try:
+                max_val = self._handle.get_param(f"{setting_name}:max")
+            except xiapi.Xi_error as err:
+                if err.status == _XI_UNKNOWN_PARAM:
+                    max_val = None
+                else:
+                    raise err
+
+            return min_val, max_val
+
     def _get_int_setting(self, setting_name: str) -> int:
         return self._handle.get_param(setting_name)
 
     def _set_int_setting(self, setting_name: str, value: int) -> None:
         self._handle.set_param(setting_name, value)
 
-    def _get_int_setting_values(self, setting_name: str) -> typing.Optional[typing.Tuple[int, int]]:
-        if self._is_setting_readonly(setting_name):
-            return None
-        else:
-            return self._handle.get_param(f"{setting_name}:min"), \
-                   self._handle.get_param(f"{setting_name}:max")
-
     def _get_float_setting(self, setting_name: str) -> float:
         return self._handle.get_param(setting_name)
 
     def _set_float_setting(self, setting_name: str, value: float) -> None:
         self._handle.set_param(setting_name, value)
-
-    def _get_float_setting_values(self, setting_name: str) -> typing.Optional[typing.Tuple[float, float]]:
-        if self._is_setting_readonly(setting_name):
-            return None
-        else:
-            try:
-                return self._handle.get_param(f"{setting_name}:min"), \
-                       self._handle.get_param(f"{setting_name}:max")
-            except xiapi.Xi_error as err:
-                if err.status == _XI_UNKNOWN_PARAM:
-                    return None
-                else:
-                    raise err
 
     def _get_str_setting(self, setting_name: str) -> str:
         return self._handle.get_param(setting_name)
@@ -392,7 +394,7 @@ class XimeaCamera(microscope.abc.Camera):
                 dtype="int",
                 get_func=lambda name=name: self._get_int_setting(name),
                 set_func=lambda v, name=name: self._set_int_setting(name, v),
-                values=lambda name=name: self._get_int_setting_values(name),
+                values=lambda name=name: self._get_setting_values(name),
                 readonly=lambda name=name: self._is_setting_readonly(name)
             )
 
@@ -402,7 +404,7 @@ class XimeaCamera(microscope.abc.Camera):
                 dtype="float",
                 get_func=lambda name=name: self._get_float_setting(name),
                 set_func=lambda v, name=name: self._set_float_setting(name, v),
-                values=lambda name=name: self._get_float_setting_values(name),
+                values=lambda name=name: self._get_setting_values(name),
                 readonly=lambda name=name: self._is_setting_readonly(name)
             )
 
