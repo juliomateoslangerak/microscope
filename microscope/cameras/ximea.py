@@ -65,7 +65,6 @@ import typing
 
 import numpy as np
 from ximea import xiapi, xidefs
-from ximea.xidefs import XI_GPO_MODE
 
 import microscope
 import microscope.abc
@@ -226,7 +225,6 @@ class XimeaCamera(microscope.abc.Camera):
         # makes it work with the rest of enums which are there to make
         # it work with TriggerTargetMixin.
         trg_source_names = [x.name for x in TrgSourceMap]
-        gpo_modes = [k for k, _ in XI_GPO_MODE.items()]
 
         def _trigger_source_setter(index: int) -> None:
             trigger_mode = TrgSourceMap[trg_source_names[index]].value
