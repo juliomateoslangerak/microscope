@@ -350,7 +350,7 @@ class XimeaCamera(microscope.abc.Camera):
 
     def _get_enum_setting(self, setting_name: str) -> int:
         try:
-            values_to_idx = {val: idx.value for val, idx in getattr(xidefs, f"XI_{setting_name.upper()}").items()}
+            values_to_idx = {val: idx.value for val, idx in xidefs.ASSOC_ENUM[setting_name].items()}
         except AttributeError as err:
             _logger.error(f"The Ximea API does not define the enum values for the setting {setting_name}")
             raise err
@@ -358,7 +358,7 @@ class XimeaCamera(microscope.abc.Camera):
 
     def _set_enum_setting(self, setting_name: str, value: enum) -> None:
         try:
-            idx_to_values = {i.value: val for val, i in getattr(xidefs, f"XI_{setting_name.upper()}").items()}
+            idx_to_values = {i.value: val for val, i in xidefs.ASSOC_ENUM[setting_name].items()}
             self._handle.set_param(setting_name, idx_to_values[value])
         except xiapi.Xi_error as err:
             _logger.error(f"Failed setting {setting_name} Error {err.status}")
@@ -453,7 +453,7 @@ class XimeaCamera(microscope.abc.Camera):
                 dtype="enum",
                 get_func=lambda name=name: self._get_enum_setting(name),
                 set_func=lambda v, name=name: self._set_enum_setting(name, v),
-                values=[v for v in xidefs.ASSOC_ENUM[name].keys()],
+                values=[v.value for v in xidefs.ASSOC_ENUM[name].values()],
                 readonly=lambda name=name: self._is_setting_readonly(name)
             )
 
