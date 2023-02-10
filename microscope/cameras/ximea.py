@@ -337,7 +337,14 @@ class XimeaCamera(microscope.abc.Camera):
         return self._handle.get_param(setting_name)
 
     def _set_str_setting(self, setting_name: str, value: str) -> None:
-        self._handle.set_param(setting_name, value)
+        # Updating initializing all the settings sometimes tries to set a setting using an empty string.
+        if len(value) == 0:
+            return
+        try:
+            self._handle.set_param(setting_name, value)
+        except xiapi.Xi_error as err:
+            if err.status in [_XI_UNKNOWN_PARAM, _XI_READ_ONLY_PARAM]:
+                _logger.debug(f"Failed setting {setting_name} Error {err.status}")
 
     def _get_enum_setting(self, setting_name: str) -> enum:
         return self._handle.get_param(setting_name)
