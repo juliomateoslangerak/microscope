@@ -356,6 +356,14 @@ class XimeaCamera(microscope.abc.Camera):
             raise err
         return values_to_idx[self._handle.get_param(setting_name)]
 
+    def _get_enum_values(self, setting_name: str) -> dict:
+        try:
+            values = {i.value: val for val, i in xidefs.ASSOC_ENUM[setting_name].items()}
+        except KeyError as err:
+            _logger.error(f"Failed getting values for {setting_name}")
+            raise err
+        return values
+
     def _set_enum_setting(self, setting_name: str, value: enum) -> None:
         try:
             idx_to_values = {i.value: val for val, i in xidefs.ASSOC_ENUM[setting_name].items()}
