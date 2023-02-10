@@ -321,7 +321,7 @@ class XimeaCamera(microscope.abc.Camera):
             self._handle.set_param(setting_name, value)
         except xiapi.Xi_error as err:
             if err.status in [_XI_UNKNOWN_PARAM, _XI_READ_ONLY_PARAM]:
-                print(f"Failed setting {setting_name} Error {err.status}")
+                _logger.debug(f"Failed setting {setting_name} Error {err.status}")
 
     def _get_float_setting(self, setting_name: str) -> float:
         return self._handle.get_param(setting_name)
@@ -331,7 +331,7 @@ class XimeaCamera(microscope.abc.Camera):
             self._handle.set_param(setting_name, value)
         except xiapi.Xi_error as err:
             if err.status in [_XI_UNKNOWN_PARAM, _XI_READ_ONLY_PARAM]:
-                print(f"Failed setting {setting_name} Error {err.status}")
+                _logger.debug(f"Failed setting {setting_name} Error {err.status}")
 
     def _get_str_setting(self, setting_name: str) -> str:
         return self._handle.get_param(setting_name)
