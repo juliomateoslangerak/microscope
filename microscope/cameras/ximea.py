@@ -105,6 +105,8 @@ _UNSUPPORTED_SETTINGS = [
     "ffs_access_key",
     # The context list is used to get a list of settings for off-line processing
     "xiapi_context_list",
+    # The trigger source setting is not added automatically but rather through a custom function so we skip it
+    "trigger_source",
 ]
 
 # During acquisition, we rely on catching timeout errors which then
