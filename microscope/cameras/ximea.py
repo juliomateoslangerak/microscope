@@ -84,6 +84,7 @@ _XI_ACQUISITION_STOPPED = 45
 _XI_UNKNOWN_PARAM = 100
 _XI_UNSUPPORTED_PARAM = 106
 _XI_UNSUPPORTED_INFO_PARAM = 107
+_XI_READ_ONLY_PARAM = 109
 
 # Some more "advanced" features of the Ximea cameras are not supported,
 # at least for the moment. These features are implemented as settings that
@@ -316,13 +317,21 @@ class XimeaCamera(microscope.abc.Camera):
         return self._handle.get_param(setting_name)
 
     def _set_int_setting(self, setting_name: str, value: int) -> None:
-        self._handle.set_param(setting_name, value)
+        try:
+            self._handle.set_param(setting_name, value)
+        except xiapi.Xi_error as err:
+            if err.status in [_XI_UNKNOWN_PARAM, _XI_READ_ONLY_PARAM]:
+                print(f"Failed setting {setting_name} Error {err.status}")
 
     def _get_float_setting(self, setting_name: str) -> float:
         return self._handle.get_param(setting_name)
 
     def _set_float_setting(self, setting_name: str, value: float) -> None:
-        self._handle.set_param(setting_name, value)
+        try:
+            self._handle.set_param(setting_name, value)
+        except xiapi.Xi_error as err:
+            if err.status in [_XI_UNKNOWN_PARAM, _XI_READ_ONLY_PARAM]:
+                print(f"Failed setting {setting_name} Error {err.status}")
 
     def _get_str_setting(self, setting_name: str) -> str:
         return self._handle.get_param(setting_name)
