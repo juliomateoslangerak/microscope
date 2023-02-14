@@ -54,6 +54,8 @@ This is only available via Ximea's website and is not available on
 PyPI.  See Ximea's website for `install instructions
 <https://www.ximea.com/support/wiki/apis/Python>`__.
 
+If installing under Linux be sure to follow the Linux installation tutorial
+<https://www.ximea.com/support/wiki/apis/XIMEA_Linux_Software_Package>__.
 """
 
 import contextlib
@@ -62,8 +64,7 @@ import logging
 import typing
 
 import numpy as np
-from ximea import xiapi
-from ximea.xidefs import XI_GPO_MODE
+from ximea import xiapi, xidefs
 
 import microscope
 import microscope.abc
@@ -79,9 +80,31 @@ _logger = logging.getLogger(__name__)
 _XI_TIMEOUT = 10
 _XI_NOT_SUPPORTED = 12
 _XI_NOT_IMPLEMENTED = 26
-_XI_ACQUISITION_STOPED = 45
+_XI_ACQUISITION_STOPPED = 45
 _XI_UNKNOWN_PARAM = 100
+_XI_UNSUPPORTED_PARAM = 106
+_XI_UNSUPPORTED_INFO_PARAM = 107
 
+# Some more "advanced" features of the Ximea cameras are not supported,
+# at least for the moment. These features are implemented as settings that
+# we have to "blacklist" to avoid their loading.
+_UNSUPPORTED_SETTINGS = [
+    # The device manifest provides XML data of the features supported by the camera
+    "device_manifest",
+    # Settings related to the FFS. Some ximea camera models provide access
+    # to the Flash memory as a file system.
+    "read_file_ffs",
+    "write_file_ffs",
+    "ffs_file_name",
+    "ffs_file_id",
+    "ffs_file_offset",
+    "ffs_file_size",
+    "free_ffs_size",
+    "used_ffs_size",
+    "ffs_access_key",
+    # The context list is used to get a list of settings for off-line processing
+    "xiapi_context_list",
+]
 
 # During acquisition, we rely on catching timeout errors which then
 # get discarded.  However, with debug level set to warning (XiApi
@@ -202,17 +225,10 @@ class XimeaCamera(microscope.abc.Camera):
         # makes it work with the rest of enums which are there to make
         # it work with TriggerTargetMixin.
         trg_source_names = [x.name for x in TrgSourceMap]
-        gpo_modes = [k for k, _ in XI_GPO_MODE.items()]
 
         def _trigger_source_setter(index: int) -> None:
             trigger_mode = TrgSourceMap[trg_source_names[index]].value
             self.set_trigger(trigger_mode, self.trigger_mode)
-
-        def _gpo_mode_setter(mode: str) -> None:
-            self._handle.set_gpo_mode(mode)
-
-        def _gpo_mode_getter() -> str:
-            return self._handle.get_gpo_mode()
 
         self.add_setting(
             "trigger source",
@@ -220,14 +236,6 @@ class XimeaCamera(microscope.abc.Camera):
             lambda: TrgSourceMap(self.trigger_type).name,
             _trigger_source_setter,
             trg_source_names,
-        )
-
-        self.add_setting(
-            "GPO_mode",
-            "enum",
-            _gpo_mode_getter,
-            _gpo_mode_setter,
-            gpo_modes
         )
 
         self.initialize()
@@ -244,7 +252,7 @@ class XimeaCamera(microscope.abc.Camera):
             if getattr(err, "status", None) == _XI_TIMEOUT:
                 return None
             elif (
-                getattr(err, "status", None) == _XI_ACQUISITION_STOPED
+                getattr(err, "status", None) == _XI_ACQUISITION_STOPPED
                 and not self._acquiring
             ):
                 # We can end up here during disable if self._acquiring
@@ -271,6 +279,66 @@ class XimeaCamera(microscope.abc.Camera):
             except Exception:
                 self._acquiring = True
                 raise
+
+    def _is_setting_readonly(self, name):
+        """
+        As far as I see, there is no other way to see if a setting is readonly apart from trying to change it
+        if a setter function is not implemented I assume it is a permanent readonly setting
+        """
+        if hasattr(self._handle, f"set_{name}"):
+            return False
+        else:
+            return True
+
+    def _get_int_setting(self, setting_name: str) -> int:
+        return self._handle.get_param(setting_name)
+
+    def _set_int_setting(self, setting_name: str, value: int) -> None:
+        self._handle.set_param(setting_name, value)
+
+    def _get_int_setting_values(self, setting_name: str) -> typing.Optional[typing.Tuple[int, int]]:
+        if self._is_setting_readonly(setting_name):
+            return None
+        else:
+            return self._handle.get_param(f"{setting_name}:min"), \
+                   self._handle.get_param(f"{setting_name}:max")
+
+    def _get_float_setting(self, setting_name: str) -> float:
+        return self._handle.get_param(setting_name)
+
+    def _set_float_setting(self, setting_name: str, value: float) -> None:
+        self._handle.set_param(setting_name, value)
+
+    def _get_float_setting_values(self, setting_name: str) -> typing.Optional[typing.Tuple[float, float]]:
+        if self._is_setting_readonly(setting_name):
+            return None
+        else:
+            try:
+                return self._handle.get_param(f"{setting_name}:min"), \
+                       self._handle.get_param(f"{setting_name}:max")
+            except xiapi.Xi_error as err:
+                if err.status == _XI_UNKNOWN_PARAM:
+                    return None
+                else:
+                    raise err
+
+    def _get_str_setting(self, setting_name: str) -> str:
+        return self._handle.get_param(setting_name)
+
+    def _set_str_setting(self, setting_name: str, value: str) -> None:
+        self._handle.set_param(setting_name, value)
+
+    def _get_enum_setting(self, setting_name: str) -> enum:
+        return self._handle.get_param(setting_name)
+
+    def _set_enum_setting(self, setting_name: str, value: enum) -> None:
+        self._handle.set_param(setting_name, value)
+
+    def _get_bool_setting(self, setting_name: str) -> bool:
+        return self._handle.get_param(setting_name)
+
+    def _set_bool_setting(self, setting_name: str, value: bool) -> None:
+        self._handle.set_param(setting_name, value)
 
     def initialize(self) -> None:
         """Initialise the camera.
@@ -314,22 +382,78 @@ class XimeaCamera(microscope.abc.Camera):
             microscope.TriggerType.SOFTWARE, microscope.TriggerMode.ONCE
         )
 
-        self._handle.set_gpo_mode("XI_GPO_EXPOSURE_ACTIVE")
+        # Add settings
+        def _add_int_setting(name):
+            self.add_setting(
+                name=name,
+                dtype="int",
+                get_func=lambda name=name: self._get_int_setting(name),
+                set_func=lambda v, name=name: self._set_int_setting(name, v),
+                values=lambda name=name: self._get_int_setting_values(name),
+                readonly=lambda name=name: self._is_setting_readonly(name)
+            )
 
-        # Add settings for the different temperature sensors.
-        for temp_param_name in [
-            "chip_temp",
-            "hous_temp",
-            "hous_back_side_temp",
-            "sensor_board_temp",
-        ]:
-            get_temp_method = getattr(self._handle, "get_" + temp_param_name)
-            # Not all cameras have temperature sensors in all
-            # locations.  We can't query if the sensor is there, we
-            # can only try to read the temperature and skip that
-            # temperature sensor if we get an exception.
+        def _add_float_setting(name):
+            self.add_setting(
+                name=name,
+                dtype="float",
+                get_func=lambda name=name: self._get_float_setting(name),
+                set_func=lambda v, name=name: self._set_float_setting(name, v),
+                values=lambda name=name: self._get_float_setting_values(name),
+                readonly=lambda name=name: self._is_setting_readonly(name)
+            )
+
+        def _add_str_setting(name):
+            self.add_setting(
+                name=name,
+                dtype="str",
+                get_func=lambda name=name: self._get_str_setting(name),
+                set_func=lambda v, name=name: self._set_str_setting(name, v),
+                # The value of the string size is extracted from the default buffer size of xiapi.Camera.get_param
+                values=256,
+                readonly=lambda name=name: self._is_setting_readonly(name)
+            )
+
+        def _add_enum_setting(name):
+            self.add_setting(
+                name=name,
+                dtype="enum",
+                get_func=lambda name=name: self._get_enum_setting(name),
+                set_func=lambda v, name=name: self._set_enum_setting(name, v),
+                values=[v for v in xidefs.ASSOC_ENUM[name].keys()],
+                readonly=lambda name=name: self._is_setting_readonly(name)
+            )
+
+        def _add_bool_setting(name):
+            self.add_setting(
+                name=name,
+                dtype="bool",
+                get_func=lambda name=name: self._get_bool_setting(name),
+                set_func=lambda v, name=name: self._set_bool_setting(name, v),
+                values=None,
+                readonly=lambda name=name: self._is_setting_readonly(name)
+            )
+
+        def _add_cmd_setting(name):
+            pass
+
+        prm_type_to_add_method = {
+            "xiTypeInteger": _add_int_setting,
+            "xiTypeFloat": _add_float_setting,
+            "xiTypeString": _add_str_setting,
+            "xiTypeEnum": _add_enum_setting,
+            "xiTypeBoolean": _add_bool_setting,
+            "xiTypeCommand": _add_cmd_setting,
+            "xiTypeInteger64": _add_int_setting,
+        }
+
+        for setting_name, setting_type in xidefs.VAL_TYPE.items():
+            # TODO: Do we have to remove here the settings that are implemented in another way?
+            # ROI, exposure,...
+            if setting_name in _UNSUPPORTED_SETTINGS:
+                continue
             try:
-                get_temp_method()
+                self._handle.get_param(setting_name)
             except xiapi.Xi_error as err:
                 # Depending on XiAPI version, camera model, and
                 # selected sensor, we might get any of these errors as
@@ -339,16 +463,15 @@ class XimeaCamera(microscope.abc.Camera):
                     _XI_NOT_SUPPORTED,
                     _XI_NOT_IMPLEMENTED,
                     _XI_UNKNOWN_PARAM,
+                    _XI_UNSUPPORTED_PARAM,
+                    _XI_UNSUPPORTED_INFO_PARAM
                 ]:
-                    raise
-            else:
-                self.add_setting(
-                    temp_param_name,
-                    "float",
-                    get_temp_method,
-                    None,
-                    values=tuple(),
-                )
+                    _logger.debug(f"The setting {setting_name} failed to be added")
+                    raise err
+                else:
+                    continue
+
+            prm_type_to_add_method[setting_type](setting_name)
 
     def _do_disable(self):
         self.abort()
