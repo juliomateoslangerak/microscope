@@ -84,6 +84,7 @@ _XI_ACQUISITION_STOPPED = 45
 _XI_UNKNOWN_PARAM = 100
 _XI_UNSUPPORTED_PARAM = 106
 _XI_UNSUPPORTED_INFO_PARAM = 107
+_XI_READ_ONLY_PARAM = 109
 
 # Some more "advanced" features of the Ximea cameras are not supported,
 # at least for the moment. These features are implemented as settings that
@@ -104,6 +105,8 @@ _UNSUPPORTED_SETTINGS = [
     "ffs_access_key",
     # The context list is used to get a list of settings for off-line processing
     "xiapi_context_list",
+    # The trigger source setting is not added automatically but rather through a custom function so we skip it
+    "trigger_source",
 ]
 
 # During acquisition, we rely on catching timeout errors which then
@@ -281,58 +284,93 @@ class XimeaCamera(microscope.abc.Camera):
                 raise
 
     def _is_setting_readonly(self, name):
-        """
-        As far as I see, there is no other way to see if a setting is readonly apart from trying to change it
-        if a setter function is not implemented I assume it is a permanent readonly setting
-        """
+        # As far as I see, there is no other way to see if a setting is readonly apart from trying to change it
+        # if a setter function is not implemented I assume it is a permanent readonly setting
+        # Some cameras implement the "device_manifest" setting that returns a full description of the settings as a
+        # XML file. As this is not a standard feature I prefer to stick with this "less proper" way of defining this
         if hasattr(self._handle, f"set_{name}"):
             return False
         else:
             return True
 
+    def _get_setting_values(self, setting_name: str) -> \
+            typing.Optional[typing.Tuple[typing.Union[int, float, None], typing.Union[int, float, None]]]:
+        if self._is_setting_readonly(setting_name):
+            return None, None
+        else:
+            try:
+                min_val = self._handle.get_param(f"{setting_name}:min")
+            except xiapi.Xi_error as err:
+                if err.status == _XI_UNKNOWN_PARAM:
+                    min_val = None
+                else:
+                    raise err
+            try:
+                max_val = self._handle.get_param(f"{setting_name}:max")
+            except xiapi.Xi_error as err:
+                if err.status == _XI_UNKNOWN_PARAM:
+                    max_val = None
+                else:
+                    raise err
+
+            return min_val, max_val
+
     def _get_int_setting(self, setting_name: str) -> int:
         return self._handle.get_param(setting_name)
 
     def _set_int_setting(self, setting_name: str, value: int) -> None:
-        self._handle.set_param(setting_name, value)
-
-    def _get_int_setting_values(self, setting_name: str) -> typing.Optional[typing.Tuple[int, int]]:
-        if self._is_setting_readonly(setting_name):
-            return None
-        else:
-            return self._handle.get_param(f"{setting_name}:min"), \
-                   self._handle.get_param(f"{setting_name}:max")
+        try:
+            self._handle.set_param(setting_name, value)
+        except xiapi.Xi_error as err:
+            if err.status in [_XI_UNKNOWN_PARAM, _XI_READ_ONLY_PARAM]:
+                _logger.debug(f"Failed setting {setting_name} Error {err.status}")
 
     def _get_float_setting(self, setting_name: str) -> float:
         return self._handle.get_param(setting_name)
 
     def _set_float_setting(self, setting_name: str, value: float) -> None:
-        self._handle.set_param(setting_name, value)
-
-    def _get_float_setting_values(self, setting_name: str) -> typing.Optional[typing.Tuple[float, float]]:
-        if self._is_setting_readonly(setting_name):
-            return None
-        else:
-            try:
-                return self._handle.get_param(f"{setting_name}:min"), \
-                       self._handle.get_param(f"{setting_name}:max")
-            except xiapi.Xi_error as err:
-                if err.status == _XI_UNKNOWN_PARAM:
-                    return None
-                else:
-                    raise err
+        try:
+            self._handle.set_param(setting_name, value)
+        except xiapi.Xi_error as err:
+            if err.status in [_XI_UNKNOWN_PARAM, _XI_READ_ONLY_PARAM]:
+                _logger.debug(f"Failed setting {setting_name} Error {err.status}")
 
     def _get_str_setting(self, setting_name: str) -> str:
         return self._handle.get_param(setting_name)
 
     def _set_str_setting(self, setting_name: str, value: str) -> None:
-        self._handle.set_param(setting_name, value)
+        # Updating initializing all the settings sometimes tries to set a setting using an empty string.
+        if len(value) == 0:
+            return
+        try:
+            self._handle.set_param(setting_name, value)
+        except xiapi.Xi_error as err:
+            if err.status in [_XI_UNKNOWN_PARAM, _XI_READ_ONLY_PARAM]:
+                _logger.debug(f"Failed setting {setting_name} Error {err.status}")
 
-    def _get_enum_setting(self, setting_name: str) -> enum:
-        return self._handle.get_param(setting_name)
+    def _get_enum_setting(self, setting_name: str) -> int:
+        try:
+            values_to_idx = {val: idx.value for val, idx in xidefs.ASSOC_ENUM[setting_name].items()}
+        except KeyError as err:
+            _logger.error(f"The Ximea API does not define the enum values for the setting {setting_name}")
+            raise err
+        return values_to_idx[self._handle.get_param(setting_name)]
+
+    def _get_enum_values(self, setting_name: str) -> dict:
+        try:
+            values = {i.value: val for val, i in xidefs.ASSOC_ENUM[setting_name].items()}
+        except KeyError as err:
+            _logger.error(f"Failed getting values for {setting_name}")
+            raise err
+        return values
 
     def _set_enum_setting(self, setting_name: str, value: enum) -> None:
-        self._handle.set_param(setting_name, value)
+        try:
+            idx_to_values = {i.value: val for val, i in xidefs.ASSOC_ENUM[setting_name].items()}
+            self._handle.set_param(setting_name, idx_to_values[value])
+        except KeyError as err:
+            _logger.error(f"Failed setting {setting_name}. Error {err.status}")
+            raise err
 
     def _get_bool_setting(self, setting_name: str) -> bool:
         return self._handle.get_param(setting_name)
@@ -389,7 +427,7 @@ class XimeaCamera(microscope.abc.Camera):
                 dtype="int",
                 get_func=lambda name=name: self._get_int_setting(name),
                 set_func=lambda v, name=name: self._set_int_setting(name, v),
-                values=lambda name=name: self._get_int_setting_values(name),
+                values=lambda name=name: self._get_setting_values(name),
                 readonly=lambda name=name: self._is_setting_readonly(name)
             )
 
@@ -399,7 +437,7 @@ class XimeaCamera(microscope.abc.Camera):
                 dtype="float",
                 get_func=lambda name=name: self._get_float_setting(name),
                 set_func=lambda v, name=name: self._set_float_setting(name, v),
-                values=lambda name=name: self._get_float_setting_values(name),
+                values=lambda name=name: self._get_setting_values(name),
                 readonly=lambda name=name: self._is_setting_readonly(name)
             )
 
@@ -410,6 +448,8 @@ class XimeaCamera(microscope.abc.Camera):
                 get_func=lambda name=name: self._get_str_setting(name),
                 set_func=lambda v, name=name: self._set_str_setting(name, v),
                 # The value of the string size is extracted from the default buffer size of xiapi.Camera.get_param
+                # This is definitely not enough for many settings. The Ximea API fails to provide proper string size
+                # and a reference has to be found in the C library.
                 values=256,
                 readonly=lambda name=name: self._is_setting_readonly(name)
             )
@@ -420,7 +460,7 @@ class XimeaCamera(microscope.abc.Camera):
                 dtype="enum",
                 get_func=lambda name=name: self._get_enum_setting(name),
                 set_func=lambda v, name=name: self._set_enum_setting(name, v),
-                values=[v for v in xidefs.ASSOC_ENUM[name].keys()],
+                values=lambda name=name: self._get_enum_values(name),
                 readonly=lambda name=name: self._is_setting_readonly(name)
             )
 
