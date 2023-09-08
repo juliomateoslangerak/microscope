@@ -68,6 +68,19 @@ Stages
 - Ludl (:class:`microscope.controllers.ludl.LudlMC2000`)
 - Zaber (:class:`microscope.controllers.zaber.ZaberDaisyChain`)
 
+DigitalIO
+=========
+
+- Raspberry Pi (:class:`microsocpe.digitalio.raspberrypi`)
+
+
+ValueLogger
+===========
+
+- Raspberry Pi (:class:`microsocpe.valuelogger.raspberrypi`) includes
+  support for the MCP9808 and TSYS01 I2C temperature sensors
+
+
 Other
 =====
 

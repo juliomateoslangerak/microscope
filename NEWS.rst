@@ -31,10 +31,17 @@ Version 0.7.0 (upcoming)
   * All filterwheels had a ``"position"`` setting which was redundant
     with the related get/set methods.  The setting was been removed.
 
+  * New :class:`ValueLogger <microscope.abc.ValueLogger>` ABC for
+    devices with a series of sensors.
+
+  * New :class:`DigitalIO <microscope.abc.DigitalIO>` ABC.
+
   * Cameras now have a property ``"shuttering_mode"`` for the type of
     electronic shuttering mode (global or rolling).
 
 * New devices supported:
+
+  * RaspberryPi as Digital IO (:class:`microscope.digitalio.raspberrypi.RPiDIO`)
 
   * Hamamatsu cameras (:class:`microscope.cameras.hamamatsu.HamamatsuCamera`)
 
@@ -64,6 +71,11 @@ Version 0.7.0 (upcoming)
   version fixes that issue.
 
 * Microscope is now dependent on Python 3.7 or later.
+
+* Python 3.8 changed the default DLL search path in Windows which
+  caused all cameras, deformable mirrors, and Linkam stage to fail to
+  load.  This version restores the use of Windows standard search
+  path.
 
 
 Version 0.6.0 (2021/01/14)

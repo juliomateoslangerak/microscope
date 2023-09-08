@@ -40,14 +40,14 @@ import importlib.machinery
 import importlib.util
 import logging
 import multiprocessing
+import os.path
 import signal
 import sys
 import time
 import typing
 from collections.abc import Iterable
 from dataclasses import dataclass
-from logging import StreamHandler
-from logging.handlers import RotatingFileHandler
+from logging import FileHandler, StreamHandler
 from threading import Thread
 
 import Pyro4
@@ -197,6 +197,7 @@ class DeviceServerOptions:
 
     config_fpath: str
     logging_level: int
+    logging_dir: str
 
 
 def _check_autoproxy_feature() -> None:
@@ -308,6 +309,7 @@ class DeviceServer(multiprocessing.Process):
         # based on a unique identifier for the device. Some devices
         # don't have UIDs available until after initialization, so
         # log to stderr until then.
+
         stderr_handler = StreamHandler(sys.stderr)
         stderr_handler.setFormatter(_create_log_formatter(cls_name))
         root_logger.addHandler(stderr_handler)
@@ -350,8 +352,11 @@ class DeviceServer(multiprocessing.Process):
 
         pyro_daemon = Pyro4.Daemon(port=port, host=host)
 
-        log_handler = RotatingFileHandler(
-            "%s_%s_%s.log" % (cls_name, host, port)
+        log_handler = FileHandler(
+            os.path.join(
+                self._options.logging_dir,
+                "%s_%s_%s.log" % (cls_name, host, port),
+            )
         )
         log_handler.setFormatter(_create_log_formatter(cls_name))
         root_logger.addHandler(log_handler)
@@ -401,7 +406,7 @@ def serve_devices(devices, options: DeviceServerOptions, exit_event=None):
 
     root_logger = logging.getLogger()
 
-    log_handler = RotatingFileHandler("__MAIN__.log")
+    log_handler = FileHandler("__MAIN__.log")
     log_handler.setFormatter(_create_log_formatter("device-server"))
     root_logger.addHandler(log_handler)
 
@@ -561,6 +566,14 @@ def _parse_cmd_line_args(args: typing.Sequence[str]) -> DeviceServerOptions:
         help="Set logging level",
     )
     parser.add_argument(
+        "--logging-dir",
+        action="store",
+        type=str,
+        default="",
+        help="Directory where log files are written to",
+    )
+
+    parser.add_argument(
         "config_fpath",
         action="store",
         type=str,
@@ -571,6 +584,7 @@ def _parse_cmd_line_args(args: typing.Sequence[str]) -> DeviceServerOptions:
     return DeviceServerOptions(
         config_fpath=parsed.config_fpath,
         logging_level=getattr(logging, parsed.logging_level.upper()),
+        logging_dir=parsed.logging_dir,
     )
 
 

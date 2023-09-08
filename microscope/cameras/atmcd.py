@@ -64,6 +64,7 @@ import numpy as np
 from numpy.ctypeslib import ndpointer
 
 import microscope
+import microscope._utils
 import microscope.abc
 
 
@@ -88,9 +89,9 @@ if arch == "32bit":
 else:
     _dllName = "atmcd64d"
 if os.name == "nt":  # is windows
-    _dll = ctypes.WinDLL(_dllName)
+    _dll = microscope._utils.library_loader(_dllName, ctypes.WinDLL)
 else:
-    _dll = ctypes.CDLL(_dllName + ".so")
+    _dll = microscope._utils.library_loader(_dllName + ".so")
 
 # Andor's types
 at_32 = c_long
@@ -99,6 +100,8 @@ at_64 = c_longlong
 at_u64 = c_ulonglong
 
 """Version Information Definitions"""
+
+
 # Version information enumeration
 class AT_VersionInfoId(c_int):
     pass
@@ -114,6 +117,8 @@ AT_VERSION_INFO_LEN = 80
 AT_CONTROLLER_CARD_MODEL_LEN = 80
 
 """DDG Lite Definitions"""
+
+
 # Channel enumeration
 class AT_DDGLiteChannelId(c_int):
     pass
@@ -501,6 +506,7 @@ for attrib_name in dir(sys.modules[__name__]):
     if attrib_name.startswith("DRV_"):
         status_codes.update({eval(attrib_name): attrib_name})
 
+
 # The lookup function.
 def lookup_status(code):
     key = code[0] if type(code) is list else code
@@ -512,6 +518,7 @@ def lookup_status(code):
 
 # The following DLL-wrapping classes are largely lifted from David Baddeley's
 # SDK3 wrapper, with some modifications and additions.
+
 
 # Classes used to handle outputs and parameters that need buffers.
 class _meta:

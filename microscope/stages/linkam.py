@@ -48,6 +48,7 @@ from ctypes import POINTER, byref
 from enum import Enum, IntEnum
 
 import microscope
+import microscope._utils
 import microscope.abc
 
 
@@ -974,11 +975,11 @@ class _LinkamBase(microscope.abc.FloatingDeviceMixin, microscope.abc.Device):
     @staticmethod
     def init_sdk():
         """Initialise the SDK and set up event callbacks"""
-        try:
-            __class__._lib = ctypes.WinDLL("LinkamSDK.dll")
-        except:
-            # Not tested
-            __class__._lib = ctypes.CDLL("libLinkamSDK.so")
+        if os.name == "nt":  # is windows
+            _libname = "LinkamSDK.dll"
+        else:  # assuming Linux.  Not tested.
+            _libname = "libLinkamSDK.so"
+        __class__._lib = microscope._utils.library_loader(_libname)
         _lib = __class__._lib
         """Initialise the SDK, and create and set the callbacks."""
         # Omit conditional pending a fix for ctypes issues when optimisations in use.
@@ -1453,7 +1454,7 @@ class LinkamCMS(_LinkamMDSMixin, _LinkamBase):
         self.get_value(_StageValueType.CmsStatus, result=self._cmsstatus)
         self.get_value(_StageValueType.CmsError, result=self._cmserror)
         # Update the refill timers.
-        for (key, flagname) in self._refill_map.items():
+        for key, flagname in self._refill_map.items():
             tracker = self._refills[key]
             is_refilling = getattr(self._cmsstatus.flags, flagname)
             if is_refilling and not tracker.refilling:
