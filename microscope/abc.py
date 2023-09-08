@@ -453,6 +453,7 @@ class Device(metaclass=abc.ABCMeta):
 
     def get_all_settings(self):
         """Return ordered settings as a list of dicts."""
+
         # Fetching some settings may fail depending on device state.
         # Report these values as 'None' and continue fetching other settings.
         def catch(f):
@@ -889,7 +890,8 @@ class Camera(TriggerTargetMixin, DataDevice):
     def _update_transform(self):
         """Update transform (after setting the client or readout transform)."""
         lr, ud, rot = (
-            self._readout_transform[i] ^ self._client_transform[i] for i in range(3)
+            self._readout_transform[i] ^ self._client_transform[i]
+            for i in range(3)
         )
         if self._readout_transform[2] and self._client_transform[2]:
             lr = not lr
@@ -1573,4 +1575,168 @@ class Stage(Device, metaclass=abc.ABCMeta):
         stage will move until the axes limit.
 
         """
+        raise NotImplementedError()
+
+
+class DigitalIO(DataDevice, metaclass=abc.ABCMeta):
+    """ABC for digital IO devices.
+
+    Digital IO devices (DIO) have a number of digital lines that can
+    be for output, or optionally input, and can switch between an On
+    and Off state.
+
+    Args:
+        numLines: total number of digital lines numbers 0 to n-1.
+
+    """
+
+    def __init__(self, numLines: int, **kwargs) -> None:
+        super().__init__(**kwargs)
+        if numLines < 1:
+            raise ValueError(
+                "NumLines must be a positive number (was %d)" % positions
+            )
+        self._numLines = numLines
+
+        # array to map wether lines are input or output
+        # true is output, start with all lines defined for output.
+        self._IOMap = [True] * self._numLines
+
+    def get_num_lines(self):
+        """Returns the number of IO lines present in this device."""
+        return self._numLines
+
+    @abc.abstractmethod
+    def set_IO_state(self, line: int, state: bool):
+        """Sets the state of a single digital line to either Output or Input.
+
+        Args:
+            line: the line to have its mode set.
+            state: ``True`` for Output or ``False`` for Input.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def get_IO_state(self, line):
+        """Returns the state of a single digital line, either Output or Input.
+
+        Args:
+            line: The line to have its mode set.
+
+        Returns:
+            Value is ``True`` for Output and ``False`` for Input.
+        """
+        raise NotImplementedError()
+
+    def set_all_IO_state(self, stateArray):
+        """Sets the state of all lines to either Input or Output
+
+        Args:
+            line: The line to have its mode set.
+            stateArray: Boolean array for the lines, ``True`` in
+                output ``False`` is Input.
+
+        """
+        for i, state in enumerate(stateArray):
+            # set each line as defined in stateArray
+            self.set_IO_state(i, state)
+
+    def get_all_IO_state(self):
+        """Returns the state of a all digital line, either Output or Input.
+
+        Returns:
+            A boolean array one entry for each line, ``True`` for
+            Output and ``False`` for Input.
+
+        """
+        stateArray = [None] * self._numLines
+        for i in range(self._numLines):
+            stateArray[i] = self.get_IO_state(i)
+        return stateArray
+
+    @abc.abstractmethod
+    def write_line(self, line, ouput):
+        """Sets the level of a single output line
+
+        Args:
+            line: the line to be set
+            output: the level ``True`` for high and ``False`` for low.
+        """
+
+        raise NotImplementedError()
+
+    def write_all_lines(self, ouput_array):
+        """Sets the output level of every output line.
+
+        Args:
+            output_array: Boolean array of output states ``True`` for
+                high, ``False`` for low, array entries for lines set
+                as inputs are ignored.
+        """
+        if len(ouput_array) != self._numLines:
+            raise ("Output array must be numLines in length")
+        for i in range(self._numLines):
+            # set line i to the IOMap entry, true for output false for input.
+            if self._IOMap[i]:
+                self.write_line(i, ouput_array[i])
+
+    @abc.abstractmethod
+    def read_line(self, line):
+        """Read a single input line.
+
+        Args:
+            line: the line to read
+
+        Returns:
+            A boolean of the line state.
+        """
+        raise NotImplementedError()
+
+    def read_all_lines(self):
+        """Read all the input lines.
+
+        Returns:
+            Boolean array with outline entries set to ``None``.
+        """
+        readarray = [None] * self._numLines
+        for i in range(self._numLines):
+            readarray[i] = self.read_line(i)
+        return readarray
+
+
+class ValueLogger(DataDevice, metaclass=abc.ABCMeta):
+    """ABC for Value logging device.
+
+    Value logging devices utilise the :class:`DataDevice`
+    infrastrucrure to send values to a receiving client.  A typical
+    example of data is temperature measurements.
+
+    Args:
+        numSensors: total number of measurements.
+
+    """
+
+    def __init__(self, numSensors: int, pullData: bool, **kwargs) -> None:
+        super().__init__(**kwargs)
+        if numSensors < 1:
+            raise ValueError(
+                "NumSensors must be a positive number (was %d)" % numSensors
+            )
+        self._numSensors = numSensors
+        # If pull data is True data will be pulled from the server if False
+        # data will be pushed from microsocpe (default)
+        self.pullData = pullData
+
+    @abc.abstractmethod
+    def initialize(self):
+        """Inialize sensors to start sending data back."""
+        raise NotImplementedError()
+
+    def get_num_sensors(self):
+        """Returns the number of sensors lines present in this instance."""
+        return self._numSensors
+
+    @abc.abstractmethod
+    def getValues(self):
+        """Returns values from all sensors"""
         raise NotImplementedError()
