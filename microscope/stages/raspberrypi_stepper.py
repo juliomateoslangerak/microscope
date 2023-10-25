@@ -149,13 +149,21 @@ class _RPiStageAxis(microscope.abc.StageAxis):
         return microscope.AxisLimits(lower=self.lower_limit, upper=self.upper_limit)
 
     def home(self) -> None:
-        # TODO: check low or high endstop
-        if self.um_per_step > 0:
-            while self.lower_endstop_pin.value:
-                self._stepper.onestep(direction=stepper.BACKWARD)
+        if self.self.upper_endstop_pin.pull == digitalio.Pull.UP:
+            if self.um_per_step > 0:
+                while self.lower_endstop_pin.value:
+                    self._stepper.onestep(direction=stepper.BACKWARD)
+            else:
+                while self.lower_endstop_pin.value:
+                    self._stepper.onestep(direction=stepper.FORWARD)
         else:
-            while self.lower_endstop_pin.value:
-                self._stepper.onestep(direction=stepper.FORWARD)
+            if self.um_per_step > 0:
+                while not self.lower_endstop_pin.value:
+                    self._stepper.onestep(direction=stepper.BACKWARD)
+            else:
+                while not self.lower_endstop_pin.value:
+                    self._stepper.onestep(direction=stepper.FORWARD)
+
         self._position = 0
         self._stepper._current_microstep = 0
         self.move_to(self.lower_limit)
