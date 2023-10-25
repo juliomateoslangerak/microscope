@@ -103,14 +103,14 @@ class _RPiStageAxis(microscope.abc.StageAxis):
             )
 
         self.lower_endstop_pin = digitalio.DigitalInOut(PIN_TO_GPIO[lower_endstop_pin])
-        self.lower_endstop_pin = digitalio.Direction.INPUT
+        self.lower_endstop_pin.direction = digitalio.Direction.INPUT
         if lower_endstop_active:
             self.lower_endstop_pin.pull = digitalio.Pull.DOWN
         else:
             self.lower_endstop_pin.pull = digitalio.Pull.UP
 
         self.upper_endstop_pin = digitalio.DigitalInOut(PIN_TO_GPIO[upper_endstop_pin])
-        self.upper_endstop_pin = digitalio.Direction.INPUT
+        self.upper_endstop_pin.direction = digitalio.Direction.INPUT
         if upper_endstop_active:
             self.upper_endstop_pin.pull = digitalio.Pull.DOWN
         else:
@@ -149,6 +149,7 @@ class _RPiStageAxis(microscope.abc.StageAxis):
         return microscope.AxisLimits(lower=self.lower_limit, upper=self.upper_limit)
 
     def home(self) -> None:
+        # TODO: check low or high endstop
         if self.um_per_step > 0:
             while self.lower_endstop_pin.value:
                 self._stepper.onestep(direction=stepper.BACKWARD)
