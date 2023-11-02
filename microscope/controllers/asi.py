@@ -294,12 +294,13 @@ class _ASIController:
 
     def wait_until_idle(self) -> None:
         """Keep sending the ``STATUS`` command until it responds ``0\\r``"""
-        self._command_and_validate(b"STATUS", b"N")
+        while self.get_command(b"STATUS") != b"\nN\r":
+            time.sleep(0.01)
 
     def _command_and_validate(self, command: bytes, expected: bytes) -> bytes:
         with self._lock:
             answer = self.get_command(command)
-            if answer == b":A \r\n":
+            if answer == b"\n:A \r":
                 # wait for move to stop
                 while self.get_command(b"STATUS") != expected:
                     time.sleep(0.01)
@@ -334,18 +335,18 @@ class _ASIController:
             self._serial.timeout = previous
 
     # Motion related methods #
-    def move_command(self, command: bytes) -> None:
-        """Send a move command and check return value."""
-        # Movement commands respond with ":A \n" but the move is then
-        # being performed.  The move is only finihsed once the
-        # "STATUS" command returns "N" rather than "B"
-        self._command_and_validate(command, b"N")
-        #
-        # No Following is not true as Cockpit expects moves to happen
-        # before the return.
-        # actully beter to just issue the move command and rely on
-        # other process to check position
-        # self.get_command(command)
+    # def move_command(self, command: bytes) -> None:
+    #     """Send a move command and check return value."""
+    #     # Movement commands respond with ":A \n" but the move is then
+    #     # being performed.  The move is only finihsed once the
+    #     # "STATUS" command returns "N" rather than "B"
+    #     self._command_and_validate(command, b"\nN\r")
+    #     #
+    #     # No Following is not true as Cockpit expects moves to happen
+    #     # before the return.
+    #     # actully beter to just issue the move command and rely on
+    #     # other process to check position
+    #     # self.get_command(command)
 
     def move_by_relative_position(
         self, axis: str, delta: float, wait=True
@@ -353,7 +354,7 @@ class _ASIController:
         """Send a relative movement command to stated axis"""
         if axis not in self.axis_list:
             raise ValueError(f"Axis {axis} not present. Verify the name of the axis or your configuration files.")
-        self.move_command(bytes(f"MOVREL {axis}={str(delta)}", "ascii"))
+        self.get_command(bytes(f"MOVREL {axis}={str(delta)}", "ascii"))
         if wait:
             self.wait_for_motor_stop(axis)
 
@@ -363,7 +364,7 @@ class _ASIController:
         """Send a relative movement command to stated axis"""
         if axis not in self.axis_list:
             raise ValueError(f"Axis {axis} not present. Verify the name of the axis or your configuration files.")
-        self.move_command(bytes(f"MOVE {axis}={str(pos)}", "ascii"))
+        self.get_command(bytes(f"MOVE {axis}={str(pos)}", "ascii"))
         if wait:
             self.wait_for_motor_stop(axis)
 
@@ -444,16 +445,13 @@ class _ASIStageAxis(microscope.abc.StageAxis):
         self._dev_conn.move_by_relative_position(self._axis, int(delta))
 
     def move_to(self, pos: float) -> None:
-        print("axis", self._axis)
-        print("go to ", pos)
         self._dev_conn.move_to_absolute_position(self._axis, int(pos))
-        print("got to ", self.position)
 
     @property
     def position(self) -> float:
         if self._dev_conn.is_busy():
             _logger.warning("querying stage axis position but device is busy")
-            self._dev_conn.wait_until_idle()
+        self._dev_conn.wait_until_idle()
         return float(self._dev_conn.get_absolute_position(self._axis))
 
     @property
