@@ -28,13 +28,13 @@ import threading
 import time
 import typing
 import logging
-from typing import Callable, Any, Dict, Union
+from typing import Any, Union
 
 import serial
 
 import microscope.abc
 import microscope._utils
-from microscope import DeviceError, InitialiseError
+from microscope import InitialiseError
 
 _logger = logging.getLogger(__name__)
 
