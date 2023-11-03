@@ -725,7 +725,7 @@ class HamamatsuCamera(microscope.abc.Camera):
             mode = self._get_long_property(dcam.IDPROP.BINNING)
             return _DCAM_BINNING_TO_MICROSCOPE[mode]
 
-    def _set_binning(self, binning: microscope.Binning) -> None:
+    def _set_binning(self, binning: microscope.Binning) -> bool:
         # Changing the binning settings may change the exposure time,
         # so save it and revert it later.
         original_exposure_time = self.get_exposure_time()
