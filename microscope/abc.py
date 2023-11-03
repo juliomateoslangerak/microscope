@@ -950,6 +950,14 @@ class Camera(TriggerTargetMixin, DataDevice):
 
     def get_roi(self) -> microscope.ROI:
         """Return current ROI."""
+        """Return current ROI.
+
+        roi.left and roi.top are 0-based (i.e. the top-left pixel is (0, 0)) and
+        they are specified as sensor physical pixels (i.e. not binned pixels).
+
+        roi.width and roi.height are specified as binned pixels (i.e. the width
+        and height of the image data).
+        """
         roi = self._get_roi()
         if self._transform[2]:
             # 90 degree rotation
@@ -964,7 +972,13 @@ class Camera(TriggerTargetMixin, DataDevice):
     def set_roi(self, roi: microscope.ROI) -> None:
         """Set the ROI according to the provided rectangle.
 
-        Return True if ROI set correctly, False otherwise.
+        roi.left and roi.top are 0-based (i.e. the top-left pixel is (0, 0)) and
+        they are specified as sensor physical pixels (i.e. not binned pixels).
+
+        roi.width and roi.height are specified as binned pixels (i.e. the width
+        and height of the image data).
+
+        Return the ROI as applied on the camera if set correctly, False otherwise.
         """
         maxw, maxh = self.get_sensor_shape()
         binning = self.get_binning()
