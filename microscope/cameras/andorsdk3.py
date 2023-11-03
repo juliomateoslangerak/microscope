@@ -617,8 +617,8 @@ class AndorSDK3(
 
     def _get_roi(self):
         return microscope.ROI(
-            self._aoi_left.get_value(),
-            self._aoi_top.get_value(),
+            self._aoi_left.get_value() - 1,
+            self._aoi_top.get_value() - 1,
             self._aoi_width.get_value(),
             self._aoi_height.get_value(),
         )
@@ -629,8 +629,8 @@ class AndorSDK3(
         if self._acquiring:
             self.abort()
         try:
-            self._aoi_width.set_value(roi.width)
-            self._aoi_height.set_value(roi.height)
+            self._aoi_width.set_value(roi.width + 1)
+            self._aoi_height.set_value(roi.height + 1)
             self._aoi_left.set_value(roi.left)
             self._aoi_top.set_value(roi.top)
         except:
@@ -639,7 +639,7 @@ class AndorSDK3(
             self._aoi_left.set_value(current.left)
             self._aoi_top.set_value(current.top)
             return False
-        return True
+        return self._get_roi()
 
     def get_gain(self):
         if hasattr(self, "_preampgain"):
