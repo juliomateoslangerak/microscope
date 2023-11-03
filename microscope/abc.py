@@ -986,6 +986,15 @@ class Camera(TriggerTargetMixin, DataDevice):
             width = maxw // binning.h
         if not height:  # 0 or None
             height = maxh // binning.v
+
+        # Check that the ROI is within the sensor bounds.
+        if left < 0 or top < 0:
+            _logger.warning("ROI outside sensor bounds. left and top must be >= 0")
+            return False
+        if left + width * binning.h > maxw or top + height * binning.v > maxh:
+            _logger.warning("ROI outside sensor bounds. Offset or size too large.")
+            return False
+
         if self._transform[2]:
             roi = microscope.ROI(left, top, height, width)
         else:

@@ -392,14 +392,6 @@ class XimeaCamera(microscope.abc.Camera):
         return self._roi
 
     def _set_roi(self, roi: microscope.ROI) -> bool:
-        if (
-            roi.width + roi.left > self._sensor_shape[0]
-            or roi.height + roi.top > self._sensor_shape[1]
-        ):
-            raise ValueError(
-                "ROI %s does not fit in sensor shape %s"
-                % (roi, self._sensor_shape)
-            )
         try:
             # These methods will fail if the width/height plus their
             # corresponding offsets are higher than the sensor size.
