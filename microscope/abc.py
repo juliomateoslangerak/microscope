@@ -949,7 +949,6 @@ class Camera(TriggerTargetMixin, DataDevice):
         raise NotImplementedError()
 
     def get_roi(self) -> microscope.ROI:
-        """Return current ROI."""
         """Return current ROI.
 
         roi.left and roi.top are 0-based (i.e. the top-left pixel is (0, 0)) and
