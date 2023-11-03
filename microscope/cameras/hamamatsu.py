@@ -327,6 +327,10 @@ class HamamatsuCamera(microscope.abc.Camera):
             dcam.IDPROP.BINNING_INDEPENDENT
         )
 
+        self._supports_subarray = supports_property(
+            dcam.IDPROP.SUBARRAYMODE
+        )
+
         # We can't query the sensor size, we can only get the image
         # size which will be affected by binning and subarray (ROI).
         # So we get it now before we start messing around.
@@ -575,6 +579,34 @@ class HamamatsuCamera(microscope.abc.Camera):
                 )
             )
 
+    def _is_subarray_enabled(self) -> bool:
+        if not self._supports_subarray:
+            return False
+
+        mode = self._get_long_property(dcam.IDPROP.SUBARRAYMODE)
+        if mode == dcam.PROPMODEVALUE.MODE__ON:
+            return True
+        elif mode == dcam.PROPMODEVALUE.MODE__OFF:
+            return False
+        else:
+            raise microscope.DeviceError(
+                "Unable to find if subarray is enabled."
+                "  It is set to %d which is neither ON (%d) nor OFF (%d)"
+                % (
+                    mode,
+                    dcam.PROPMODEVALUE.MODE__ON,
+                    dcam.PROPMODEVALUE.MODE__OFF,
+                )
+            )
+
+    def _subarray_enable(self) -> None:
+        if not self._is_subarray_enabled():
+            self._set_long_property(dcam.IDPROP.SUBARRAYMODE, dcam.PROPMODEVALUE.MODE__ON)
+
+    def _subarray_disable(self) -> None:
+        if self._is_subarray_enabled():
+            self._set_long_property(dcam.IDPROP.SUBARRAYMODE, dcam.PROPMODEVALUE.MODE__OFF)
+
     def initialize(self) -> None:
         pass
 
@@ -728,10 +760,35 @@ class HamamatsuCamera(microscope.abc.Camera):
         return success
 
     def _get_roi(self) -> microscope.ROI:
-        pass
+        binning = self._get_binning()
+        if self._is_subarray_enabled():
+            return microscope.ROI(
+                self._get_long_property(dcam.IDPROP.SUBARRAYHPOS),
+                self._get_long_property(dcam.IDPROP.SUBARRAYVPOS),
+                self._get_long_property(dcam.IDPROP.SUBARRAYHSIZE) // binning.h,
+                self._get_long_property(dcam.IDPROP.SUBARRAYVSIZE) // binning.v,
+            )
+        else:
+            return microscope.ROI(
+                0,
+                0,
+                self._sensor_shape[0] // binning.h,
+                self._sensor_shape[1] // binning.v,
+            )
 
-    def _set_roi(self, roi: microscope.ROI) -> None:
-        pass
+    def _set_roi(self, roi: microscope.ROI) -> microscope.ROI:
+        if roi == microscope.ROI(0, 0, *self._sensor_shape):
+            self._subarray_disable()
+        else:
+            binning = self._get_binning()
+            self._set_long_property(dcam.IDPROP.SUBARRAYHPOS, roi.left)
+            self._set_long_property(dcam.IDPROP.SUBARRAYVPOS, roi.top)
+            self._set_long_property(dcam.IDPROP.SUBARRAYHSIZE, roi.width * binning.h)
+            self._set_long_property(dcam.IDPROP.SUBARRAYVSIZE, roi.height * binning.v)
+
+            self._subarray_enable()
+
+        return self._get_roi()
 
     def _fetch_data(self) -> typing.Optional[np.ndarray]:
         _logger.debug("Start waiting for FRAMEREADY")
