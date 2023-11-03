@@ -968,7 +968,7 @@ class Camera(TriggerTargetMixin, DataDevice):
         """Set the ROI on the hardware.  Return `True` if successful."""
         return False
 
-    def set_roi(self, roi: microscope.ROI) -> None:
+    def set_roi(self, roi: microscope.ROI) -> typing.Union[microscope.ROI, bool]:
         """Set the ROI according to the provided rectangle.
 
         roi.left and roi.top are 0-based (i.e. the top-left pixel is (0, 0)) and
