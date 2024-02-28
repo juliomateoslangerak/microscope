@@ -1172,6 +1172,138 @@ class DeformableMirror(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         return super().trigger()
 
 
+class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
+    """Base class for Spatial Light Modulators (SLM).
+
+    This class is very similar to the Deformable Mirrors abc. We are trying
+    to keep nomenclature consistent. The main differences are that the shape
+    of the patterns are different and that we need to provide wavelengths
+    along the patterns.
+
+    Similarly to deformable mirrors, there is no method to reset
+    or clear a deformable mirror. For the sake of uniformity, it is better for
+    python-microscope users to pass the pattern they want, probably a
+    pattern that flattens the SLM.
+
+    The private properties `_patterns` and `_pattern_idx` are
+    initialized to `None` to support the queueing of patterns and
+    software triggering.
+
+    """
+
+    @abc.abstractmethod
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._patterns: typing.Optional[numpy.ndarray] = None
+        self._pattern_idx: int = -1
+
+    @abc.abstractmethod
+    def _get_shape(self) -> typing.Tuple[int, int]:
+        """Return a tuple of `(width, height)` indicating shape in pixels."""
+        raise NotImplementedError
+
+    def get_shape(self) -> typing.Tuple[int, int]:
+        """Return a tuple of `(width, height)`"""
+        return self._get_shape()
+
+    def _validate_patterns(self, patterns: numpy.ndarray, wavelengths: typing.List[int]) -> None:
+        """Validate the shape of a series of patterns.
+
+        Only validates the shape of the patterns, not if the values
+        are actually in the [0 1] range.  If some hardware is unable
+        to handle values outside their defined range (most will simply
+        clip them), then it's the responsability of the subclass to do
+        the clipping before sending the values.
+
+        """
+        if 2 > patterns.ndim > 3:
+            raise ValueError(
+                "PATTERNS has %d dimensions (must be 2 or 3)" % patterns.ndim
+            )
+        elif len(wavelengths) != patterns.shape[0]:
+            raise ValueError(
+                "The length of the wavelengths list %d does not match the number of patterns to load %d"
+                % (len(wavelengths), patterns.shape[0],)
+            )
+        elif (patterns.shape[-2], patterns.shape[-1]) != self.get_shape():
+            raise ValueError(
+                "PATTERNS shape %s does not match the SLM's shape %s"
+                % ((patterns.shape[-2], patterns.shape[-1],), self.get_shape(),)
+            )
+
+    @abc.abstractmethod
+    def _do_apply_pattern(self, pattern: numpy.ndarray, wavelength: int) -> None:
+        raise NotImplementedError()
+
+    def apply_pattern(self, pattern: numpy.ndarray, wavelength: int) -> None:
+        """Apply this pattern.
+
+        Args:
+            pattern: A 'XY' ndarray with the phases to be loaded into the SLM. The phases have to be
+            in the range [0, 1]. 0=0pi and 1=2pi
+            wavelength: The wavelength to which the SLM has to be calibrated for that pattern
+
+        Raises:
+            microscope.IncompatibleStateError: if device trigger type is
+                not set to software.
+
+        """
+        if self.trigger_type is not microscope.TriggerType.SOFTWARE:
+            # An alternative to error is to change the trigger type,
+            # apply the pattern, then restore the trigger type, but
+            # that would clear the queue on the device.  It's better
+            # to have the user specifically do it.  See issue #61.
+            raise microscope.IncompatibleStateError(
+                "apply_pattern requires software trigger type"
+            )
+        self._validate_patterns(pattern)
+        self._do_apply_pattern(pattern, wavelength)
+
+    def queue_patterns(self, patterns: numpy.ndarray, wavelengths: typing.List[int]) -> None:
+        """Send a set of patterns to the SLM.
+
+        Args:
+            patterns: An `NXY` elements array of phase values in the range
+            [0, 1]. 0=0pi and 1=2pi. N is the number of phases to add the queue
+            wavelengths: A list of wavelengths of length N
+
+        A convenience fallback is provided for software triggering is provided.
+
+        """
+        self._validate_patterns(patterns, wavelengths)
+        self._patterns = patterns
+        self._pattern_idx = -1  # none is applied yet
+        self._run_patterns()  # TODO: How do we specify if
+
+    def _do_trigger(self) -> None:
+        """Convenience fallback.
+
+        This only provides a convenience fallback for devices that
+        don't support queuing multiple patterns and software trigger,
+        i.e., devices that take only one pattern at a time.  This is
+        not the case of most devices.
+
+        Devices that support queuing patterns, should override this
+        method.
+
+        .. todo::
+
+            Instead of a convenience fallback, we should have a
+            separate mixin for this.
+
+        """
+        if self._patterns is None:
+            raise microscope.DeviceError("no pattern queued to apply")
+        self._pattern_idx += 1
+        self.apply_pattern(self._patterns[self._pattern_idx, :])
+
+    def trigger(self) -> None:
+        """Apply the next pattern in the queue."""
+        # This is just a passthrough to the TriggerTargetMixin class
+        # and only exists for the docstring.
+        return super().trigger()
+
+
 class LightSource(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
     """Light source such as lasers or LEDs.
 
