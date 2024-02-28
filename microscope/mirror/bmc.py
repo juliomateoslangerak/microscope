@@ -1,7 +1,8 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 
-## Copyright (C) 2017 David Pinto <david.pinto@bioch.ox.ac.uk>
+## Copyright (C) 2020 David Miguel Susano Pinto <carandraug@gmail.com>
+##
+## This file is part of Microscope.
 ##
 ## Microscope is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -23,40 +24,52 @@ import ctypes
 import os
 import warnings
 
-import Pyro4
-import six
+import numpy
 
-from microscope.devices import DeformableMirror
+import microscope
+import microscope._utils
+import microscope.abc
 
-import microscope._wrappers.BMC as BMC
+
+try:
+    import microscope._wrappers.BMC as BMC
+except Exception as e:
+    raise microscope.LibraryLoadError(e) from e
 
 
-@Pyro4.expose
-class BMCDeformableMirror(DeformableMirror):
-  def __init__(self, serial_number, *args, **kwargs):
-    super(BMCDeformableMirror, self).__init__()
-    self._dm = BMC.DM()
+class BMCDeformableMirror(
+    microscope._utils.OnlyTriggersOnceOnSoftwareMixin,
+    microscope.abc.DeformableMirror,
+):
+    """Boston MicroMachines (BMC) deformable mirror.
 
-    if __debug__:
-      BMC.ConfigureLog(six.b(os.devnull), BMC.LOG_ALL)
-    else:
-      BMC.ConfigureLog(six.b(os.devnull), BMC.LOG_OFF)
+    BMC deformable mirrors only support software trigger.
+    """
 
-    status = BMC.Open(self._dm, six.b(serial_number))
-    if status:
-      raise Exception(BMC.ErrorString(status))
+    def __init__(self, serial_number: str, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._dm = BMC.DM()
 
-    self._n_actuators = self._dm.ActCount
+        if __debug__:
+            BMC.ConfigureLog(os.devnull.encode(), BMC.LOG_ALL)
+        else:
+            BMC.ConfigureLog(os.devnull.encode(), BMC.LOG_OFF)
 
-  def apply_pattern(self, pattern):
-    self._validate_patterns(pattern)
-    data_pointer = pattern.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
-    status = BMC.SetArray(self._dm, data_pointer, None)
-    if status:
-      raise Exception(BMC.ErrorString(status))
+        status = BMC.Open(self._dm, serial_number.encode())
+        if status:
+            raise microscope.InitialiseError(BMC.ErrorString(status))
 
-  def __del__(self):
-    status = BMC.Close(self._dm)
-    if status:
-      warnings.warn(BMC.ErrorString(status), RuntimeWarning)
-    super(BMCDeformableMirror, self).__del__()
+    @property
+    def n_actuators(self) -> int:
+        return self._dm.ActCount
+
+    def _do_apply_pattern(self, pattern: numpy.ndarray) -> None:
+        data_pointer = pattern.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+        status = BMC.SetArray(self._dm, data_pointer, None)
+        if status:
+            raise microscope.DeviceError(BMC.ErrorString(status))
+
+    def _do_shutdown(self) -> None:
+        status = BMC.Close(self._dm)
+        if status:
+            warnings.warn(BMC.ErrorString(status), RuntimeWarning)

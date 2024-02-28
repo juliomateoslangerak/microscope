@@ -1,20 +1,26 @@
-#!/usr/bin/python
-# -*- coding: utf-8
-#
-# Copyright 2017 Mick Phillips (mick.phillips@gmail.com)
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#!/usr/bin/env python3
+
+## Copyright (C) 2009 David Baddeley <d.baddeley@auckland.ac.nz>
+## Copyright (C) 2020 Mick Phillips <mick.phillips@gmail.com>
+##
+## This file is part of Microscope.
+##
+## Microscope is free software: you can redistribute it and/or modify
+## it under the terms of the GNU General Public License as published by
+## the Free Software Foundation, either version 3 of the License, or
+## (at your option) any later version.
+##
+## Microscope is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with Microscope.  If not, see <http://www.gnu.org/licenses/>.
+
+## The implementation of dllFunc is based on the implementation in
+## PYME, hence copyright to David Baddeley.
+
 """pvcam library wrapper.
 
 This module exposes pvcam C library functions in python.
@@ -128,44 +134,49 @@ This module exposes pvcam C library functions in python.
 """
 
 import ctypes
-import numpy as np
+import logging
 import os
 import platform
-import Pyro4
-from microscope import devices
-from microscope.devices import keep_acquiring
-from six import string_types
 import time
+import weakref
+
+import numpy as np
+import Pyro4
+
+import microscope
+import microscope._utils
+import microscope.abc
+
+
+_logger = logging.getLogger(__name__)
+
 
 # Readout transform mapping - {CHIP_NAME: {port: transform}}
-READOUT_TRANSFORMS = {
-    'Evolve-5': {0: (0,0,0),
-                 1: (1,0,0)}
-}
+READOUT_TRANSFORMS = {"Evolve-5": {0: (0, 0, 0), 1: (1, 0, 0)}}
 
 # === Data types ===
 # Base typedefs, from pvcam SDK master.h
-#typedef unsigned short rs_bool;
+# typedef unsigned short rs_bool;
 rs_bool = ctypes.c_ushort
-#typedef signed char    int8;
+# typedef signed char    int8;
 int8 = ctypes.c_byte
-#typedef unsigned char  uns8;
+# typedef unsigned char  uns8;
 uns8 = ctypes.c_ubyte
-#typedef short          int16;
+# typedef short          int16;
 int16 = ctypes.c_short
-#typedef unsigned short uns16;
+# typedef unsigned short uns16;
 uns16 = ctypes.c_ushort
-#typedef int            int32;
+# typedef int            int32;
 int32 = ctypes.c_int32
-#typedef unsigned int   uns32;
+# typedef unsigned int   uns32;
 uns32 = ctypes.c_uint32
-#typedef float          flt32;
+# typedef float          flt32;
 flt32 = ctypes.c_float
-#typedef double         flt64;
+# typedef double         flt64;
 flt64 = ctypes.c_double
-#typedef unsigned long long ulong64;
+# typedef unsigned long long ulong64;
 ulong64 = ctypes.c_ulonglong
-#typedef signed long long long64;
+# typedef signed long long long64;
 long64 = ctypes.c_longlong
 # enums
 enumtype = ctypes.c_int32
@@ -497,42 +508,54 @@ PARAM_LAST_MUXED_SIGNAL = 84082869
 # === C structures ===
 # GUID for #FRAME_INFO structure.
 class PVCAM_FRAME_INFO_GUID(ctypes.Structure):
-    _fields_ = [("f1", uns32),
-                ("f2", uns16),
-                ("f3", uns16),
-                ("f4", uns8 * 8),]
+    _fields_ = [
+        ("f1", uns32),
+        ("f2", uns16),
+        ("f3", uns16),
+        ("f4", uns8 * 8),
+    ]
+
 
 # Structure used to uniquely identify frames in the camera.
 class FRAME_INFO(ctypes.Structure):
-    _fields_ = [("FrameInfoGUID", PVCAM_FRAME_INFO_GUID),
-                ("hCam", int16),
-                ("FrameNr", int32),
-                ("TimeStamp", long64),
-                ("ReadoutTime", int32),
-                ("TimeStampBOF", long64),]
+    _fields_ = [
+        ("FrameInfoGUID", PVCAM_FRAME_INFO_GUID),
+        ("hCam", int16),
+        ("FrameNr", int32),
+        ("TimeStamp", long64),
+        ("ReadoutTime", int32),
+        ("TimeStampBOF", long64),
+    ]
 
 
 class smart_stream_type(ctypes.Structure):
-    _fields_ = [("entries", uns16),
-                ("params", uns32),]
+    _fields_ = [
+        ("entries", uns16),
+        ("params", uns32),
+    ]
 
 
 class rgn_type(ctypes.Structure):
-    _fields_ = [("s1", uns16),
-               ("s2", uns16),
-               ("sbin", uns16),
-               ("p1", uns16),
-               ("p2", uns16),
-               ("pbin", uns16),]
+    _fields_ = [
+        ("s1", uns16),
+        ("s2", uns16),
+        ("sbin", uns16),
+        ("p1", uns16),
+        ("p2", uns16),
+        ("pbin", uns16),
+    ]
 
 
 class io_struct(ctypes.Structure):
     pass
 
-io_struct._fields_ = [("io_port", uns16),
-                     ("io_type", uns32),
-                     ("state", flt64),
-                     ("next", ctypes.POINTER(io_struct))]
+
+io_struct._fields_ = [
+    ("io_port", uns16),
+    ("io_type", uns32),
+    ("state", flt64),
+    ("next", ctypes.POINTER(io_struct)),
+]
 
 
 class io_list(ctypes.Structure):
@@ -548,6 +571,7 @@ class io_list(ctypes.Structure):
         ("pre_close", ctypes.POINTER(io_struct)),
         ("post_close", ctypes.POINTER(io_struct)),
     ]
+
 
 class active_camera_type(ctypes.Structure):
     _fields_ = [
@@ -577,7 +601,7 @@ class active_camera_type(ctypes.Structure):
 class md_frame_header(ctypes.Structure):
     _fields_ = [
         ("signature", uns32),
-        ("version", uns8 ),
+        ("version", uns8),
         ("frameNr", uns32),
         ("roiCount", uns16),
         ("timestampBOF", uns32),
@@ -590,7 +614,8 @@ class md_frame_header(ctypes.Structure):
         ("colorMask", uns8),
         ("flags", uns8),
         ("extendedMdSize", uns16),
-        ("_reserved", uns8*8),]
+        ("_reserved", uns8 * 8),
+    ]
 
 
 class md_frame_roi_header(ctypes.Structure):
@@ -601,11 +626,9 @@ class md_frame_roi_header(ctypes.Structure):
         ("roi", rgn_type),
         ("flags", uns8),
         ("extendedMdSize", uns16),
-        ("_reserved", uns8*7),
+        ("_reserved", uns8 * 7),
     ]
 
-
-PL_MD_EXT_TAGS_MAX_SUPPORTED = 255
 
 class md_ext_item_info(ctypes.Structure):
     _fields_ = [
@@ -614,19 +637,21 @@ class md_ext_item_info(ctypes.Structure):
         ("name", ctypes.c_char_p),
     ]
 
+
 class md_ext_item(ctypes.Structure):
     _fields_ = [
-        ("tagInfo", ctypes.POINTER(md_ext_item_info)), #
-        ("value", ctypes.c_void_p)
+        ("tagInfo", ctypes.POINTER(md_ext_item_info)),  #
+        ("value", ctypes.c_void_p),
     ]
 
 
 class md_ext_item_collection(ctypes.Structure):
     _fields_ = [
-        ("list", md_ext_item*PL_MD_EXT_TAGS_MAX_SUPPORTED),
-        ("map", ctypes.POINTER(md_ext_item)*PL_MD_EXT_TAGS_MAX_SUPPORTED),
+        ("list", md_ext_item * PL_MD_EXT_TAGS_MAX_SUPPORTED),
+        ("map", ctypes.POINTER(md_ext_item) * PL_MD_EXT_TAGS_MAX_SUPPORTED),
         ("count", uns16),
     ]
+
 
 class md_frame_roi(ctypes.Structure):
     _fields_ = [
@@ -636,6 +661,7 @@ class md_frame_roi(ctypes.Structure):
         ("extMdData", ctypes.c_void_p),
         ("extMdDataSize", uns16),
     ]
+
 
 class md_frame(ctypes.Structure):
     _fields_ = [
@@ -649,20 +675,22 @@ class md_frame(ctypes.Structure):
     ]
 
 
-if os.name in ('nt', 'ce'):
-    if platform.architecture()[0] == '32bit':
-        _lib = ctypes.WinDLL('pvcam32')
+if os.name == "nt":  # is windows
+    if platform.architecture()[0] == "32bit":
+        _lib = microscope._utils.library_loader("pvcam32", ctypes.WinDLL)
     else:
-        _lib = ctypes.WinDLL('pvcam64')
+        _lib = microscope._utils.library_loader("pvcam64", ctypes.WinDLL)
 else:
-    _lib = ctypes.CDLL('pvcam.so')
+    _lib = microscope._utils.library_loader("pvcam.so")
+
 
 ### Functions ###
 STRING = ctypes.c_char_p
 
+
 # classes so that we do some magic and automatically add byrefs etc ... can classify outputs
 # (Nicked from PYME's Ixon wrapper.)
-class _meta(object):
+class _meta:
     pass
 
 
@@ -700,14 +728,16 @@ def stripMeta(val):
     else:
         return val
 
+
 # Function type for callbacks.
 CALLBACK = ctypes.CFUNCTYPE(ctypes.c_void_p)
 
 
-class dllFunction(object):
+class dllFunction:
     """Expose a DLL function to python.
 
     (Again, largely nicked from PYME.)"""
+
     def __init__(self, name, args=[], argnames=[], buf_len=-1, lib=_lib):
         self.f = getattr(lib, name)
         self.f.restype = rs_bool
@@ -723,12 +753,12 @@ class dllFunction(object):
 
         self.buf_len = buf_len
 
-        docstring = name + '\n\nArguments:\n===========\n'
+        docstring = name + "\n\nArguments:\n===========\n"
         for i in range(len(args)):
-            an = ''
+            an = ""
             if i < len(argnames):
                 an = argnames[i]
-            docstring += '\t%s\t%s\n' % (args[i], an)
+            docstring += "\t%s\t%s\n" % (args[i], an)
 
         self.f.__doc__ = docstring
 
@@ -738,9 +768,9 @@ class dllFunction(object):
         ret = []
         # pl_get_param buffer length depends on the parameter being fetched, so
         # use kwargs to pass buffer length.
-        if 'buf_len' in kwargs:
-            bs = kwargs['buf_len']
-        elif self.name == 'pl_get_enum_param':
+        if "buf_len" in kwargs:
+            bs = kwargs["buf_len"]
+        elif self.name == "pl_get_enum_param":
             # last argument is buffer length
             bs = args[-1]
         elif self.buf_len >= 0:
@@ -753,7 +783,9 @@ class dllFunction(object):
 
         for j in range(len(self.inp)):
             if self.inp[j]:  # an input
-                if self.f.argtypes[j] is CALLBACK and not isinstance(args[i], CALLBACK):
+                if self.f.argtypes[j] is CALLBACK and not isinstance(
+                    args[i], CALLBACK
+                ):
                     ars.append(CALLBACK(args[i]))
                 else:
                     ars.append(args[i])
@@ -768,12 +800,13 @@ class dllFunction(object):
         res = self.f(*ars)
         # print res
 
-
         if res == False:
             err_code = _lib.pl_error_code()
             err_msg = ctypes.create_string_buffer(ERROR_MSG_LEN)
             _lib.pl_error_message(err_code, err_msg)
-            raise Exception('pvcam error %d: %s' % (err_code, err_msg.value))
+            raise microscope.DeviceError(
+                "pvcam error %d: %s" % (err_code, err_msg.value)
+            )
 
         if len(ret) == 0:
             return None
@@ -788,7 +821,6 @@ def _status():
     err_code = _lib.pl_error_code()
     err_msg = ctypes.create_string_buffer(ERROR_MSG_LEN)
     _lib.pl_error_message(err_code, err_msg)
-    print (str(buffer(err_msg)))
 
 
 def dllFunc(name, args=[], argnames=[], buf_len=0):
@@ -799,85 +831,209 @@ def dllFunc(name, args=[], argnames=[], buf_len=0):
 
 """DLL function imports."""
 # Class 0 functions - library
-dllFunc('pl_pvcam_get_ver', [OUTPUT(uns16)], ['version'])
-dllFunc('pl_pvcam_init')
-dllFunc('pl_pvcam_uninit')
+dllFunc("pl_pvcam_get_ver", [OUTPUT(uns16)], ["version"])
+dllFunc("pl_pvcam_init")
+dllFunc("pl_pvcam_uninit")
 # Class 0 functions - camera
-dllFunc('pl_cam_close', [int16], ['hcam'])
-dllFunc('pl_cam_get_name',
-        [int16, OUTSTRING],
-        ['can_num', 'cam_name'], buf_len=CAM_NAME_LEN)
-dllFunc('pl_cam_get_total', [OUTPUT(int16),], ['total_cams',])
-dllFunc('pl_cam_open',
-        [STRING, OUTPUT(int16), int16],
-        ['cam_name', 'hcam', 'o_mode'])
-dllFunc('pl_cam_register_callback',
-        [int16, int32, CALLBACK],
-        ['hcam', 'event', 'Callback'])
-dllFunc('pl_cam_register_callback_ex',
-        [int16, int32, CALLBACK, ctypes.c_void_p],
-        ['hcam', 'event', 'Callback', 'Context'])
-dllFunc('pl_cam_register_callback_ex2',
-        [int16, int32, CALLBACK],
-        ['hcam', 'event', 'Callback'])
-dllFunc('pl_cam_register_callback_ex3',
-        [int16, int32, CALLBACK, ctypes.c_void_p],
-        ['hcam', 'event', 'Callback', 'Context'])
-dllFunc('pl_cam_deregister_callback',
-        [int16, ctypes.c_void_p],
-        ['hcam', 'event'])
+dllFunc("pl_cam_close", [int16], ["hcam"])
+dllFunc(
+    "pl_cam_get_name",
+    [int16, OUTSTRING],
+    ["can_num", "cam_name"],
+    buf_len=CAM_NAME_LEN,
+)
+dllFunc(
+    "pl_cam_get_total",
+    [
+        OUTPUT(int16),
+    ],
+    [
+        "total_cams",
+    ],
+)
+dllFunc(
+    "pl_cam_open",
+    [STRING, OUTPUT(int16), int16],
+    ["cam_name", "hcam", "o_mode"],
+)
+dllFunc(
+    "pl_cam_register_callback",
+    [int16, int32, CALLBACK],
+    ["hcam", "event", "Callback"],
+)
+dllFunc(
+    "pl_cam_register_callback_ex",
+    [int16, int32, CALLBACK, ctypes.c_void_p],
+    ["hcam", "event", "Callback", "Context"],
+)
+dllFunc(
+    "pl_cam_register_callback_ex2",
+    [int16, int32, CALLBACK],
+    ["hcam", "event", "Callback"],
+)
+dllFunc(
+    "pl_cam_register_callback_ex3",
+    [int16, int32, CALLBACK, ctypes.c_void_p],
+    ["hcam", "event", "Callback", "Context"],
+)
+dllFunc(
+    "pl_cam_deregister_callback", [int16, ctypes.c_void_p], ["hcam", "event"]
+)
 # Class 1 functions - error handling. Handled in dllFunction.
 # Class 2 functions - configuration/setup.
-dllFunc('pl_get_param', [int16, uns32, int16, OUTPUT(ctypes.c_void_p)],
-        ['hcam', 'param_id', 'param_attrib', 'param_value'])
-dllFunc('pl_set_param', [int16, uns32, ctypes.c_void_p],
-        ['hcam', 'param_id', 'param_value'])
-dllFunc('pl_get_enum_param',
-        [int16, uns32, uns32, OUTPUT(int32), OUTSTRING, uns32],
-        ['hcam', 'param_id', 'index', 'value', 'desc', 'length'])
-dllFunc('pl_enum_str_length', [int16, uns32, uns32, OUTPUT(uns32)],
-        ['hcam', 'param_id', 'index', 'length'])
-dllFunc('pl_pp_reset', [int16,], ['hcam'])
-dllFunc('pl_create_smart_stream_struct', [OUTPUT(smart_stream_type), uns16],
-        ['pSmtStruct', 'entries'])
-dllFunc('pl_release_smart_stream_struct', [ctypes.POINTER(smart_stream_type),],
-        ['pSmtStruct',])
-dllFunc('pl_create_frame_info_struct', [OUTPUT(FRAME_INFO),],
-        ['pNewFrameInfo'])
-dllFunc('pl_release_frame_info_struct', [ctypes.POINTER(FRAME_INFO),],
-        ['pFrameInfoToDel',])
-dllFunc('pl_exp_abort', [int16, int16], ['hcam', 'cam_state'])
-dllFunc('pl_exp_setup_seq',
-        [int16, uns16, uns16, ctypes.POINTER(rgn_type), int16, uns32, OUTPUT(uns32)],
-        ['hcam', 'exp_total', 'rgn_total', 'rgn_array', 'exp_mode', 'exposure_time', 'exp_bytes'])
-dllFunc('pl_exp_start_seq', [int16, ctypes.c_void_p], ['hcam', 'pixel_stream'])
-dllFunc('pl_exp_setup_cont',
-        [int16, uns16, ctypes.POINTER(rgn_type), int16, uns32, OUTPUT(uns32), int16],
-        ['hcam', 'rgn_total', 'rgn_array', 'exp_mode', 'exposure_time', 'exp_bytes', 'buffer_mode'])
-dllFunc('pl_exp_start_cont',
-        [int16, ctypes.c_void_p, uns32],
-        ['hcam', 'pixel_stream', 'size'])
-dllFunc('pl_exp_check_status',
-        [int16, OUTPUT(int16), OUTPUT(uns32)],
-        ['hcam', 'status', 'bytes_arrived'])
-dllFunc('pl_exp_check_cont_status',
-        [int16, OUTPUT(int16), OUTPUT(uns32), OUTPUT(uns32)],
-        ['hcam', 'status', 'bytes_arrived', 'buffer_cnt'])
-dllFunc('pl_exp_check_cont_status_ex',
-        [int16, OUTPUT(int16), OUTPUT(uns32), OUTPUT(uns32), ctypes.POINTER(FRAME_INFO)],
-        ['hcam', 'status', 'byte_cnt', 'buffer_cnt', 'pFrameInfo'])
-dllFunc('pl_exp_get_latest_frame', [int16, OUTPUT(ctypes.c_void_p)], ['hcam', 'frame'])
-dllFunc('pl_exp_get_latest_frame_ex',
-        [int16, OUTPUT(ctypes.c_void_p), ctypes.POINTER(FRAME_INFO)],
-        ['hcam', 'frame', 'pFrameInfo'])
-dllFunc('pl_exp_get_oldest_frame', [int16, OUTPUT(ctypes.c_void_p)], ['hcam', 'frame'])
-dllFunc('pl_exp_get_oldest_frame_ex',
-        [int16, OUTPUT(ctypes.c_void_p), ctypes.POINTER(FRAME_INFO)],
-        ['hcam', 'frame', 'pFrameInfo'])
-dllFunc('pl_exp_unlock_oldest_frame', [int16], ['hcam'])
-dllFunc('pl_exp_stop_cont', [int16, int16], ['hcam', 'cam_state'])
-dllFunc('pl_exp_abort', [int16, int16], ['hcam', 'cam_state'])
-dllFunc('pl_exp_finish_seq', [int16, ctypes.c_void_p], ['hcam', 'pixel_stream'])
+dllFunc(
+    "pl_get_param",
+    [int16, uns32, int16, OUTPUT(ctypes.c_void_p)],
+    ["hcam", "param_id", "param_attrib", "param_value"],
+)
+dllFunc(
+    "pl_set_param",
+    [int16, uns32, ctypes.c_void_p],
+    ["hcam", "param_id", "param_value"],
+)
+dllFunc(
+    "pl_get_enum_param",
+    [int16, uns32, uns32, OUTPUT(int32), OUTSTRING, uns32],
+    ["hcam", "param_id", "index", "value", "desc", "length"],
+)
+dllFunc(
+    "pl_enum_str_length",
+    [int16, uns32, uns32, OUTPUT(uns32)],
+    ["hcam", "param_id", "index", "length"],
+)
+dllFunc(
+    "pl_pp_reset",
+    [
+        int16,
+    ],
+    ["hcam"],
+)
+dllFunc(
+    "pl_create_smart_stream_struct",
+    [OUTPUT(smart_stream_type), uns16],
+    ["pSmtStruct", "entries"],
+)
+dllFunc(
+    "pl_release_smart_stream_struct",
+    [
+        ctypes.POINTER(smart_stream_type),
+    ],
+    [
+        "pSmtStruct",
+    ],
+)
+dllFunc(
+    "pl_create_frame_info_struct",
+    [
+        OUTPUT(FRAME_INFO),
+    ],
+    ["pNewFrameInfo"],
+)
+dllFunc(
+    "pl_release_frame_info_struct",
+    [
+        ctypes.POINTER(FRAME_INFO),
+    ],
+    [
+        "pFrameInfoToDel",
+    ],
+)
+dllFunc("pl_exp_abort", [int16, int16], ["hcam", "cam_state"])
+dllFunc(
+    "pl_exp_setup_seq",
+    [
+        int16,
+        uns16,
+        uns16,
+        ctypes.POINTER(rgn_type),
+        int16,
+        uns32,
+        OUTPUT(uns32),
+    ],
+    [
+        "hcam",
+        "exp_total",
+        "rgn_total",
+        "rgn_array",
+        "exp_mode",
+        "exposure_time",
+        "exp_bytes",
+    ],
+)
+dllFunc("pl_exp_start_seq", [int16, ctypes.c_void_p], ["hcam", "pixel_stream"])
+dllFunc(
+    "pl_exp_setup_cont",
+    [
+        int16,
+        uns16,
+        ctypes.POINTER(rgn_type),
+        int16,
+        uns32,
+        OUTPUT(uns32),
+        int16,
+    ],
+    [
+        "hcam",
+        "rgn_total",
+        "rgn_array",
+        "exp_mode",
+        "exposure_time",
+        "exp_bytes",
+        "buffer_mode",
+    ],
+)
+dllFunc(
+    "pl_exp_start_cont",
+    [int16, ctypes.c_void_p, uns32],
+    ["hcam", "pixel_stream", "size"],
+)
+dllFunc(
+    "pl_exp_check_status",
+    [int16, OUTPUT(int16), OUTPUT(uns32)],
+    ["hcam", "status", "bytes_arrived"],
+)
+dllFunc(
+    "pl_exp_check_cont_status",
+    [int16, OUTPUT(int16), OUTPUT(uns32), OUTPUT(uns32)],
+    ["hcam", "status", "bytes_arrived", "buffer_cnt"],
+)
+dllFunc(
+    "pl_exp_check_cont_status_ex",
+    [
+        int16,
+        OUTPUT(int16),
+        OUTPUT(uns32),
+        OUTPUT(uns32),
+        ctypes.POINTER(FRAME_INFO),
+    ],
+    ["hcam", "status", "byte_cnt", "buffer_cnt", "pFrameInfo"],
+)
+dllFunc(
+    "pl_exp_get_latest_frame",
+    [int16, OUTPUT(ctypes.c_void_p)],
+    ["hcam", "frame"],
+)
+dllFunc(
+    "pl_exp_get_latest_frame_ex",
+    [int16, OUTPUT(ctypes.c_void_p), ctypes.POINTER(FRAME_INFO)],
+    ["hcam", "frame", "pFrameInfo"],
+)
+dllFunc(
+    "pl_exp_get_oldest_frame",
+    [int16, OUTPUT(ctypes.c_void_p)],
+    ["hcam", "frame"],
+)
+dllFunc(
+    "pl_exp_get_oldest_frame_ex",
+    [int16, OUTPUT(ctypes.c_void_p), ctypes.POINTER(FRAME_INFO)],
+    ["hcam", "frame", "pFrameInfo"],
+)
+dllFunc("pl_exp_unlock_oldest_frame", [int16], ["hcam"])
+dllFunc("pl_exp_stop_cont", [int16, int16], ["hcam", "cam_state"])
+dllFunc("pl_exp_abort", [int16, int16], ["hcam", "cam_state"])
+dllFunc(
+    "pl_exp_finish_seq", [int16, ctypes.c_void_p], ["hcam", "pixel_stream"]
+)
 
 
 # Map ATTR_ enums to the return type for that ATTR.
@@ -902,7 +1058,7 @@ _typemap = {
     TYPE_UNS16: uns16,
     TYPE_UNS32: uns32,
     TYPE_UNS64: ulong64,
-    TYPE_ENUM: int32, # from SDK documentation
+    TYPE_ENUM: int32,  # from SDK documentation
     TYPE_BOOLEAN: rs_bool,
     TYPE_INT8: int8,
     TYPE_CHAR_PTR: ctypes.c_char_p,
@@ -911,28 +1067,29 @@ _typemap = {
     TYPE_INT64: long64,
     TYPE_SMART_STREAM_TYPE: smart_stream_type,
     TYPE_SMART_STREAM_TYPE_PTR: ctypes.POINTER(smart_stream_type),
-    TYPE_FLT32: flt32,}
+    TYPE_FLT32: flt32,
+}
 
 
 # Map TYPE enums to the appropriate setting dtype.
 _dtypemap = {
-    TYPE_INT16: 'int',
-    TYPE_INT32: 'int',
-    TYPE_FLT64: 'float',
-    TYPE_UNS8: 'int',
-    TYPE_UNS16: 'int',
-    TYPE_UNS32: 'int',
-    TYPE_UNS64: 'int',
-    TYPE_ENUM: 'enum',
-    TYPE_BOOLEAN: 'bool',
-    TYPE_INT8: 'int',
-    TYPE_CHAR_PTR: 'str',
+    TYPE_INT16: "int",
+    TYPE_INT32: "int",
+    TYPE_FLT64: "float",
+    TYPE_UNS8: "int",
+    TYPE_UNS16: "int",
+    TYPE_UNS32: "int",
+    TYPE_UNS64: "int",
+    TYPE_ENUM: "enum",
+    TYPE_BOOLEAN: "bool",
+    TYPE_INT8: "int",
+    TYPE_CHAR_PTR: "str",
     TYPE_VOID_PTR: None,
     TYPE_VOID_PTR_PTR: None,
-    TYPE_INT64: 'int',
+    TYPE_INT64: "int",
     TYPE_SMART_STREAM_TYPE: None,
     TYPE_SMART_STREAM_TYPE_PTR: None,
-    TYPE_FLT32: 'float',
+    TYPE_FLT32: "float",
 }
 
 # Mapping of param ids to maximum string lengths.
@@ -940,7 +1097,7 @@ _dtypemap = {
 # querying PARAM_DD_INFO_LEN. However, querying PARAM_DD_INFO frequently causes
 # a general protection fault in the DLL, regardless of buffer length.
 _length_map = {
-    PARAM_DD_INFO: None,
+    PARAM_DD_INFO: PARAM_DD_INFO_LENGTH,
     PARAM_CHIP_NAME: CCD_NAME_LEN,
     PARAM_SYSTEM_NAME: MAX_SYSTEM_NAME_LEN,
     PARAM_VENDOR_NAME: MAX_VENDOR_NAME_LEN,
@@ -953,8 +1110,11 @@ _length_map = {
 }
 
 # map PARAM enums to the parameter name
-_param_to_name = {globals()[param]:param for param in globals()
-                  if (param.startswith('PARAM_') and param != 'PARAM_NAME_LEN')}
+_param_to_name = {
+    globals()[param]: param
+    for param in globals()
+    if (param.startswith("PARAM_") and param != "PARAM_NAME_LEN")
+}
 
 
 def get_param_type(param_id):
@@ -970,120 +1130,171 @@ def get_param_dtype(param_id):
 
 
 # Map status codes to strings.
-STATUS_STRINGS = {READOUT_NOT_ACTIVE: 'READOUT_NOT_ACTIVE',
-                  EXPOSURE_IN_PROGRESS: 'EXPOSURE_IN_PROGRESS',
-                  READOUT_IN_PROGRESS: 'READOUT_IN_PROGRESS',
-                  READOUT_COMPLETE: 'READOUT_COMPLETE',
-                  READOUT_FAILED: 'READOUT_FAILED',
-                  FRAME_AVAILABLE: 'FRAME_AVAILABLE',}
-
-
-# Allowable enum values that the hardware fails to report.
-_ENUM_FIXES = {
-    'Evolve-5': {PARAM_PMODE: [(0, 'Normal'), (4, 'Alternate Normal')],},
+STATUS_STRINGS = {
+    READOUT_NOT_ACTIVE: "READOUT_NOT_ACTIVE",
+    EXPOSURE_IN_PROGRESS: "EXPOSURE_IN_PROGRESS",
+    READOUT_IN_PROGRESS: "READOUT_IN_PROGRESS",
+    READOUT_COMPLETE: "READOUT_COMPLETE",
+    READOUT_FAILED: "READOUT_FAILED",
+    FRAME_AVAILABLE: "FRAME_AVAILABLE",
 }
 
 
 # === Python classes ===
 # Trigger modes.
-class TriggerMode(object):
+class TriggerMode:
     """A microscope trigger mode using PVCAM PMODES."""
-    def __init__(self, id, label, pv_mode, microscope_mode):
-        self.id = id
+
+    def __init__(self, label, pv_mode):
         self.label = label
         self.pv_mode = pv_mode
-        self.microscope_mode = microscope_mode
 
     def __repr__(self):
         return "<%s: '%s'>" % (type(self).__name__, self.label)
 
 
 # Enumerate trigger types.
-(TRIG_SOFT, TRIG_TIMED, TRIG_VARIABLE, TRIG_FIRST, TRIG_STROBED, TRIG_BULB) = range(6)
+(
+    TRIG_SOFT,
+    TRIG_TIMED,
+    TRIG_VARIABLE,
+    TRIG_FIRST,
+    TRIG_STROBED,
+    TRIG_BULB,
+) = range(6)
 
 # Trigger mode definitions.
 TRIGGER_MODES = {
-    TRIG_SOFT: TriggerMode(TRIG_SOFT, 'software', TIMED_MODE, devices.TRIGGER_SOFT),
-    TRIG_TIMED: TriggerMode(TRIG_TIMED, 'timed', TIMED_MODE, -1),
-    TRIG_VARIABLE: TriggerMode(TRIG_VARIABLE, 'variable timed', VARIABLE_TIMED_MODE, -1),
-    TRIG_FIRST: TriggerMode(TRIG_FIRST, 'trig. first', TRIGGER_FIRST_MODE, devices.TRIGGER_BEFORE),
-    TRIG_STROBED: TriggerMode(TRIG_STROBED, 'strobed', STROBED_MODE, devices.TRIGGER_BEFORE),
-    TRIG_BULB: TriggerMode(TRIG_BULB, 'bulb', BULB_MODE, devices.TRIGGER_DURATION),
+    TRIG_SOFT: TriggerMode("software", TIMED_MODE),
+    TRIG_TIMED: TriggerMode("timed", TIMED_MODE),
+    TRIG_VARIABLE: TriggerMode("variable timed", VARIABLE_TIMED_MODE),
+    TRIG_FIRST: TriggerMode("trig. first", TRIGGER_FIRST_MODE),
+    TRIG_STROBED: TriggerMode("strobed", STROBED_MODE),
+    TRIG_BULB: TriggerMode("bulb", BULB_MODE),
+}
+
+PV_MODE_TO_TRIGGER = {
+    TRIG_SOFT: (microscope.TriggerType.SOFTWARE, microscope.TriggerMode.ONCE),
+    # Microscope and PVCam use mode strobe for very different things,
+    # check with the PVCam manual carefully.  PVCam's STROBED_MODE
+    # means that one external trigger starts *each* exposure in a
+    # sequence, which maps to Microscope trigger mode ONCE.  PVCam's
+    # TRIGGER_FIRST_MODE means that one external trigger signals the
+    # start of a sequence.
+    TRIG_FIRST: (
+        microscope.TriggerType.RISING_EDGE,
+        microscope.TriggerMode.START,
+    ),
+    TRIG_STROBED: (
+        microscope.TriggerType.RISING_EDGE,
+        microscope.TriggerMode.ONCE,
+    ),
+    TRIG_BULB: (
+        microscope.TriggerType.RISING_EDGE,
+        microscope.TriggerMode.BULB,
+    ),
 }
 
 
-class PVParam(object):
-    """A wrapper around PVCAM parameters."""
-    def __init__(self, camera, param_id):
-        self.cam = camera
-        self.param_id = param_id
+TRIGGER_TO_PV_MODE = {v: k for k, v in PV_MODE_TO_TRIGGER.items()}
 
+
+class PVParam:
+    """A wrapper around PVCAM parameters."""
+
+    @staticmethod
+    def factory(camera, param_id):
+        """Create a PVParam or appropriate subclass"""
+        # A mapping of pv parameters types to python types.
+        #   None means unsupported.
+        #   Parameters omitted from the mapping will default to PVParam.
+        __types__ = {
+            TYPE_SMART_STREAM_TYPE: None,
+            TYPE_SMART_STREAM_TYPE_PTR: None,
+            TYPE_VOID_PTR: None,
+            TYPE_VOID_PTR_PTR: None,
+            TYPE_ENUM: PVEnumParam,
+            TYPE_CHAR_PTR: PVStringParam,
+        }
+        # Determine the appropiate type from its id.
+        pvtype = __types__.get(param_id >> 24 & 255, PVParam)
+        if pvtype is None:
+            raise microscope.LibraryLoadError(
+                "Parameter %s not supported" % _param_to_name[param_id]
+            )
+        return pvtype(camera, param_id)
+
+    def __init__(self, camera, param_id):
+        # Use a weakref back to the camera to avoid circular dependency.
+        self.cam = weakref.proxy(camera)
+        self.param_id = param_id
         self.name = _param_to_name[param_id]
         self._pvtype = param_id >> 24 & 255
+        if self.name == "PARAM_READOUT_TIME":
+            # Bugged. Here is what the SDK says: "The parameter type is
+            # incorrectly defined. The actual type is TYPE_UNS32."
+            self._pvtype = TYPE_UNS32
         self.dtype = _dtypemap[self._pvtype]
         self._ctype = _typemap[self._pvtype]
         self.__cache = {}
 
-
     def set_value(self, new_value):
-        """Set a parameter value."""
-        if self.dtype == 'enum':
-            # We may be passed a value, a description string, or a tuple of
-            # (value, string).
-            values, descriptions = zip(*self.values)
-            if hasattr(new_value, '__iter__'):
-                desc = str(new_value[1])
-            elif isinstance(new_value, string_types):
-                desc = str(new_value)
-            else:
-                desc = None
-            # If we have a description, rely on that, as this avoids any confusion
-            # of index and value.
-            if desc and desc in descriptions:
-                new_index = descriptions.index(desc)
-                new_value = values[new_index]
-            elif desc:
-                raise Exception("Could not find description '%s' for enum %s." % (desc, self.name))
-        _set_param(self.cam.handle,
-                   self.param_id,
-                   # TODO: this throws errors on strings, since need to put them into
-                   # a buffer before creating a pointer. Does any pvcam hardware let you
-                   # write to strings, though?
-                   ctypes.byref(ctypes.c_void_p(new_value)))
+        """Set a parameter value.
+
+        Subclasses should do whatever processing they need on new_value,
+        then call super().set_value(new_value)"""
+        try:
+            ref = ctypes.byref(new_value)
+        except TypeError:
+            # Need to convert python type to ctype first.
+            ref = ctypes.byref(self._ctype(new_value))
+        _set_param(self.cam.handle, self.param_id, ref)
         # Read back the value to update cache.
         self._query(force_query=True)
 
-
-
     def _query(self, what=ATTR_CURRENT, force_query=False):
-        """Query the DLL for an attribute for this parameter."""
+        """Query the DLL for an attribute for this parameter.
+
+        This returns pythonic types, not ctypes."""
         err = None
-        key = (self, what) # key for cache
+        key = (self, what)  # key for cache
         if self.cam._acquiring and not force_query:
             return self.__cache.get(key, None)
         if what == ATTR_AVAIL:
             return self.available
         elif not self.available:
-            raise Exception("Parameter %s is not available" % self.name)
-        rtype = _attr_map[what] # return type
+            raise microscope.DeviceError(
+                "Parameter %s is not available" % self.name
+            )
+        rtype = _attr_map[what]  # return type
         if not rtype:
             rtype = _get_param(self.cam.handle, self.param_id, ATTR_TYPE)
         if rtype.value == TYPE_CHAR_PTR:
             buf_len = _length_map[self.param_id]
             if not buf_len:
-                raise Exception('pvcam: parameter %s not supported in python.' % self.name)
+                raise microscope.DeviceError(
+                    "pvcam: parameter %s not supported in python." % self.name
+                )
             try:
-                result = _get_param(self.cam.handle, self.param_id, what, buf_len=buf_len)
+                result = _get_param(
+                    self.cam.handle, self.param_id, what, buf_len=buf_len
+                )
             except Exception as e:
                 err = e
+            else:
+                result = result.value
         else:
             try:
                 result = _get_param(self.cam.handle, self.param_id, what)
             except Exception as e:
                 err = e
-
-        if err and err.message.startswith('pvcam error 49'):
-            self.cam._logger.warn("Parameter %s not available due to camera state." % self.name)
+            else:
+                result = ctypes.POINTER(self._ctype)(result).contents.value
+        # Test on err.args prevents indexing into empty tuple.
+        if err and err.args and err.args[0].startswith("pvcam error 49"):
+            _logger.warn(
+                "Parameter %s not available due to camera state.", self.name
+            )
             result = None
         elif err:
             raise e
@@ -1091,90 +1302,119 @@ class PVParam(object):
             self.__cache[key] = result
         return result
 
-
     @property
     def access(self):
         """Return parameter access attribute."""
-        return self._query(what=ATTR_ACCESS).value
-
+        return int(
+            _get_param(self.cam.handle, self.param_id, ATTR_ACCESS).value
+        )
 
     @property
     def available(self):
         """Return whether or not parameter is available on hardware."""
-        return bool(_get_param(self.cam.handle, self.param_id, ATTR_AVAIL))
-
+        return bool(
+            _get_param(self.cam.handle, self.param_id, ATTR_AVAIL).value
+        )
 
     @property
     def count(self):
         """Return count of parameter enum entries."""
-        return self._query(what=ATTR_COUNT).value
-
+        return int(
+            _get_param(self.cam.handle, self.param_id, ATTR_COUNT).value
+        )
 
     @property
     def values(self):
-        """Get parameter values, range or string length."""
-        if self.dtype == 'enum':
-            values = []
-            for i in range(self.count):
-                length = _enum_str_length(self.cam.handle, self.param_id, i)
-                value, desc = _get_enum_param(self.cam.handle, self.param_id, i, length)
-                values.append((value.value, desc.value))
-            chip = self.cam._params[PARAM_CHIP_NAME].current
-            missing = _ENUM_FIXES.get(chip, {}).get(self.param_id, [])
-            for m in missing:
-                if m[0] not in zip(*values)[0]:
-                    values.append(m)
-            values.sort()
-        elif self.dtype in [str, 'str']:
-            values = _length_map[self.param_id] or 0
-        else:
-            try:
-                values = (ctypes.POINTER(self._ctype)(self._query(ATTR_MIN)).contents.value,
-                          ctypes.POINTER(self._ctype)(self._query(ATTR_MAX)).contents.value)
-            except:
-                raise
-        return values
+        """Get parameter min and max values.
 
-
-    @property
-    def raw(self):
-        """Return a raw parameter query result."""
-        return self._query()
-
+        Subclasses for strings and enum override this."""
+        return (self._query(ATTR_MIN), self._query(ATTR_MAX))
 
     @property
     def current(self):
-        """Return the current (or cached) parameter value."""
-        if self._pvtype == TYPE_CHAR_PTR:
-                return str(memoryview(self.raw).tobytes()) or ''
-        elif self._pvtype in [TYPE_SMART_STREAM_TYPE, TYPE_SMART_STREAM_TYPE_PTR,
-                              TYPE_VOID_PTR, TYPE_VOID_PTR_PTR]:
-            raise Exception('Value conversion not supported for parameter %s.' % self.name)
-        elif self._pvtype == TYPE_ENUM:
-            value = int(self.raw.value or 0) # c_void_p(0) is None, so replace with 0
-            vals, descs = zip(*self.values)
-            if value in vals:
-                index = vals.index(value)
-                description = descs[index]
-            else:
-                index = None
-                description = '*UNDEFINED*'
-            return (value, description)
+        """Return the current (or cached) parameter value.
+
+        Subclasses should override this for more complex data types."""
+        return self._query()
+
+
+class PVEnumParam(PVParam):
+    """PVParam subclass for enums"""
+
+    def set_value(self, new_value):
+        """Set an enum parameter value."""
+        # We may be passed a value, a description string, or a tuple of
+        # (value, string).
+        values, descriptions = list(zip(*self.values.items()))
+        if hasattr(new_value, "__iter__"):
+            desc = str(new_value[1])
+        elif isinstance(new_value, str):
+            desc = str(new_value)
         else:
-            return ctypes.POINTER(self._ctype)(self.raw).contents.value
+            desc = None
+        # If we have a description, rely on that, as this avoids any confusion
+        # of index and value.
+        if desc and desc in descriptions:
+            new_index = descriptions.index(desc)
+            new_value = values[new_index]
+        elif desc:
+            raise Exception(
+                "Could not find description '%s' for enum %s."
+                % (desc, self.name)
+            )
+        super().set_value(new_value)
+
+    @property
+    def current(self):
+        """Return the current (or cached) enum parameter value."""
+        # c_void_p(0) is None, so replace with 0
+        return int(self._query() or 0)
+
+    @property
+    def values(self):
+        """Get allowable enum values"""
+        values = {}
+        for i in range(self.count):
+            length = _enum_str_length(self.cam.handle, self.param_id, i)
+            value, desc = _get_enum_param(
+                self.cam.handle, self.param_id, i, length
+            )
+            values[value.value] = desc.value.decode()
+        return values
 
 
-@Pyro4.behavior('single')
-class PVCamera(devices.FloatingDeviceMixin, devices.CameraDevice):
+class PVStringParam(PVParam):
+    """PVParam subclass for strings"""
+
+    def set_value(self, new_value):
+        """Set a string parameter value"""
+        if hasattr(new_value, "encode"):
+            new_value = new_value.encode()
+        super().set_value(new_value)
+
+    @property
+    def current(self):
+        """Return the current (or cached) string parameter value."""
+        return self._query().decode()
+
+    @property
+    def values(self):
+        """Get allowable string length."""
+        values = _length_map[self.param_id] or 0
+        return values
+
+
+class PVCamera(
+    microscope.abc.FloatingDeviceMixin,
+    microscope.abc.Camera,
+):
     """Implements the CameraDevice interface for the pvcam library."""
+
     # Keep track of open cameras.
     open_cameras = []
 
-
-    def __init__(self, *args, **kwargs):
-        super(PVCamera, self).__init__(**kwargs)
-        # Camera index in DLL.
-        self._index = kwargs.get('index', 0)
+    def __init__(self, index=0, **kwargs):
+        super().__init__(index=index, **kwargs)
         # Camera name in DLL.
         self._pv_name = None
         # Camera handle.
@@ -1184,9 +1424,9 @@ class PVCamera(devices.FloatingDeviceMixin, devices.CameraDevice):
         # Region of interest.
         self.roi = (None, None, None, None)
         # Binning setting.
-        self.binning = (1, 1)
+        self.binning = microscope.Binning(1, 1)
         self._trigger = TRIG_STROBED
-        self.exposure_time = 0.001 # in seconds
+        self.exposure_time = 0.001  # in seconds
         # Cycle time
         self.cycle_time = self.exposure_time
         # Data buffer.
@@ -1197,38 +1437,50 @@ class PVCamera(devices.FloatingDeviceMixin, devices.CameraDevice):
         self._circ_buffer_length = 10
 
         # Add common settings.
-        self.add_setting('exposure time',
-                         float,
-                         lambda: self.exposure_time,
-                         self.set_exposure_time,
-                         lambda: (1e-6, 1))
-        self.add_setting('trigger mode',
-                          'enum',
-                          lambda: (self._trigger, TRIGGER_MODES[self._trigger].label),
-                          lambda args: setattr(self, '_trigger', int(args[0])),
-                          [(k, v.label) for k, v in TRIGGER_MODES.items()]
-                          )
-        self.add_setting('circular buffer length',
-                         int,
-                         lambda: self._circ_buffer_length,
-                         lambda value: setattr(self, '_circ_buffer_length', value),
-                         (2, 100))
+        self.add_setting(
+            "exposure time",
+            "float",
+            lambda: self.exposure_time,
+            self.set_exposure_time,
+            lambda: (1e-6, 1),
+        )
+        self.add_setting(
+            "trigger mode",
+            "enum",
+            lambda: self._trigger,
+            lambda value: setattr(self, "_trigger", value),
+            {k: v.label for k, v in TRIGGER_MODES.items()},
+        )
+        self.add_setting(
+            "circular buffer length",
+            "int",
+            lambda: self._circ_buffer_length,
+            lambda value: setattr(self, "_circ_buffer_length", value),
+            (2, 100),
+        )
+
+        self.initialize()
 
     @property
     def _region(self):
         """Return a rgn_type for current roi and binning settings."""
-        return rgn_type(self.roi[0], self.roi[2]-1, self.binning[0],
-                        self.roi[1], self.roi[3]-1, self.binning[1])
-
+        return rgn_type(
+            self.roi.left,
+            self.roi.left + self.roi.width - 1,
+            self.binning.h,
+            self.roi.top,
+            self.roi.top + self.roi.height - 1,
+            self.binning.v,
+        )
 
     """Private methods, called here and within super classes."""
+
     def _fetch_data(self):
         """Fetch data - for use in fetch_loop."""
         # Not used: images fetched using callback.
         return None
 
-
-    def _on_enable(self):
+    def _do_enable(self):
         """Enable the camera hardware and make ready to respond to triggers.
 
         Return True if successful, False if not."""
@@ -1239,61 +1491,112 @@ class PVCamera(devices.FloatingDeviceMixin, devices.CameraDevice):
             t_exp = int(self.exposure_time * 1e6)
         else:
             self._params[PARAM_EXP_RES].set_value(EXP_RES_ONE_MILLISEC)
-            t_exp = value = int(self.exposure_time * 1e3)
+            t_exp = int(self.exposure_time * 1e3)
+        # Determine the data type of the buffer
+        # Kinetix has an 8 bit mode, may need more options for colour
+        # cameras.
+        buffer_dtype = "uint16"
+        if self._params[PARAM_BIT_DEPTH].current == 8:
+            buffer_dtype = "uint8"
         # Configure camera, allocate buffer, and register callback.
         if self._trigger == TRIG_SOFT:
             # Software triggering for single frames.
             # Set up callback.
             self._using_callback = True
+
             def cb():
                 """Soft trigger mode end-of-frame callback."""
                 timestamp = time.time()
                 frame = self._buffer.copy()
-                self._logger.debug("Fetched single frame.")
+                _logger.debug("Fetched single frame.")
                 _exp_finish_seq(self.handle, CCS_CLEAR)
-                self._dispatch_buffer.put((frame, timestamp))
+                self._put(frame, timestamp)
                 return
+
             # Need to keep a reference to the callback.
             self._eof_callback = CALLBACK(cb)
-            _cam_register_callback(self.handle, PL_CALLBACK_EOF, self._eof_callback)
-            nbytes = _exp_setup_seq(self.handle, 1, 1, # cam, num epxosures, num regions
-                                    self._region, TRIGGER_MODES[self._trigger].pv_mode, t_exp)
-            self._buffer = np.require(np.zeros(self.shape, dtype='uint16'),
-                                      requirements=['C_CONTIGUOUS','ALIGNED','OWNDATA'])
+            _cam_register_callback(
+                self.handle, PL_CALLBACK_EOF, self._eof_callback
+            )
+            nbytes = _exp_setup_seq(
+                self.handle,
+                1,
+                1,  # cam, num epxosures, num regions
+                self._region,
+                TRIGGER_MODES[self._trigger].pv_mode,
+                t_exp,
+            )
+            buffer_shape = (
+                self.roi.height // self.binning.v,
+                self.roi.width // self.binning.h,
+            )
+            self._buffer = np.require(
+                np.empty(buffer_shape, dtype=buffer_dtype),
+                requirements=["C_CONTIGUOUS", "ALIGNED", "OWNDATA"],
+            )
         else:
             # Use a circular buffer.
             self._using_callback = True
+
+            # Determine the data type of the frame
+            frame_type = uns16
+            if buffer_dtype == "uint8":
+                frame_type = uns8
+
             def cb():
                 """Circular buffer mode end-of-frame callback."""
                 timestamp = time.time()
-                frame_p = ctypes.cast(_exp_get_latest_frame(self.handle), ctypes.POINTER(uns16))
-                frame = np.ctypeslib.as_array(frame_p, (self.roi[2], self.roi[3])).copy()
-                self._logger.debug("Fetched frame from circular buffer.")
-                self._dispatch_buffer.put((frame, timestamp))
+                frame_p = ctypes.cast(
+                    _exp_get_latest_frame(self.handle),
+                    ctypes.POINTER(frame_type),
+                )
+                frame = np.ctypeslib.as_array(
+                    frame_p, (self.roi[2], self.roi[3])
+                ).copy()
+                _logger.debug("Fetched frame from circular buffer.")
+                self._put(frame, timestamp)
                 return
+
             # Need to keep a reference to the callback.
             self._eof_callback = CALLBACK(cb)
-            _cam_register_callback(self.handle, PL_CALLBACK_EOF, self._eof_callback)
-            buffer_shape = (self._circ_buffer_length*self.roi[2], self.roi[3])
-            self._buffer = np.require(np.zeros(buffer_shape, dtype='uint16'),
-                                          requirements=['C_CONTIGUOUS', 'ALIGNED', 'OWNDATA'])
-            nbytes = _exp_setup_cont(self.handle, 1, self._region,
-                                     TRIGGER_MODES[self._trigger].pv_mode, t_exp, CIRC_OVERWRITE).value
-
-
+            _cam_register_callback(
+                self.handle, PL_CALLBACK_EOF, self._eof_callback
+            )
+            buffer_shape = (
+                self._circ_buffer_length,
+                self.roi.height // self.binning.v,
+                self.roi.width // self.binning.h,
+            )
+            self._buffer = np.require(
+                np.empty(buffer_shape, dtype=buffer_dtype),
+                requirements=["C_CONTIGUOUS", "ALIGNED", "OWNDATA"],
+            )
+            nbytes = _exp_setup_cont(
+                self.handle,
+                1,
+                self._region,
+                TRIGGER_MODES[self._trigger].pv_mode,
+                t_exp,
+                CIRC_OVERWRITE,
+            ).value
 
         # Read back exposure time.
         t_readback = self._params[PARAM_EXPOSURE_TIME].current
         t_resolution = self._params[PARAM_EXP_RES].current
-        multipliers = {EXP_RES_ONE_SEC: 1.,
-                       EXP_RES_ONE_MILLISEC: 1e-3,
-                       EXP_RES_ONE_MICROSEC: 1e-6}
+        multipliers = {
+            EXP_RES_ONE_SEC: 1.0,
+            EXP_RES_ONE_MILLISEC: 1e-3,
+            EXP_RES_ONE_MICROSEC: 1e-6,
+        }
         if isinstance(t_resolution, tuple):
             self.exposure_time = t_readback * multipliers[t_resolution[0]]
         else:
             self.exposure_time = t_readback * multipliers[t_resolution]
         # Update cycle time. Exposure time in seconds; readout time in microseconds.
-        self.cycle_time = self.exposure_time + 1e-6 * self._params[PARAM_READOUT_TIME].current
+        self.cycle_time = (
+            self.exposure_time
+            + 1e-6 * self._params[PARAM_READOUT_TIME].current
+        )
         # Set up exposure time for VARIABLE_TIMED_MODE, as according to documentation.
         # It doesn't seem to work.
         if self._trigger == TRIG_VARIABLE:
@@ -1301,31 +1604,33 @@ class PVCamera(devices.FloatingDeviceMixin, devices.CameraDevice):
         # If using real triggering, start triggered acquisition.
         # (Software triggering will start acquisition in soft_trigger().)
         if self._trigger != TRIG_SOFT:
-            _exp_start_cont(self.handle, self._buffer.ctypes.data_as(ctypes.c_void_p), self._buffer.nbytes)
+            _exp_start_cont(
+                self.handle,
+                self._buffer.ctypes.data_as(ctypes.c_void_p),
+                self._buffer.nbytes,
+            )
         # Done.
         self._acquiring = True
         return self._acquiring
 
-
-    def _on_disable(self):
+    def _do_disable(self):
         """Disable the hardware for a short period of inactivity."""
         self.abort()
         _cam_deregister_callback(self.handle, PL_CALLBACK_EOF)
 
-
-    def _on_shutdown(self):
+    def _do_shutdown(self) -> None:
         """Disable the hardware for a prolonged period of inactivity."""
         self.abort()
         _cam_close(self.handle)
         PVCamera.open_cameras.remove(self.handle)
         if not PVCamera.open_cameras:
-            self._logger.info("No more open cameras - calling _pvcam_uninit.")
+            _logger.info("No more open cameras - calling _pvcam_uninit.")
             _pvcam_uninit()
-
 
     """Private shape-related methods. These methods do not need to account
     for camera orientation or transforms due to readout mode, as that
     is handled in the parent class."""
+
     def _get_sensor_shape(self):
         """Return the sensor shape (width, height)."""
         return self.shape
@@ -1334,29 +1639,31 @@ class PVCamera(devices.FloatingDeviceMixin, devices.CameraDevice):
         """Return the current binning (horizontal, vertical)."""
         return self.binning
 
-    @keep_acquiring
-    def _set_binning(self, h, v):
+    @microscope.abc.keep_acquiring
+    def _set_binning(self, binning):
         """Set binning to (h, v)."""
         #  The keep_acquiring decorator will cause recreation of buffers.
-        self.binning = (h, v)
+        self.binning = microscope.Binning(binning.h, binning.v)
 
     def _get_roi(self):
         """Return the current ROI (left, top, width, height)."""
         return self.roi
 
-    @keep_acquiring
-    def _set_roi(self, left, top, width, height):
+    @microscope.abc.keep_acquiring
+    def _set_roi(self, roi):
         """Set the ROI to (left, tip, width, height)."""
-        self.roi = (left, top, width, height)
-
+        right = roi.left + roi.width
+        bottom = roi.top + roi.height
+        if (right, bottom) > self.shape:
+            raise ValueError("ROI exceeds sensor area.")
+        self.roi = roi
 
     """Public methods, callable from client."""
+
     def get_id(self):
         """Get hardware's unique identifier."""
         return self._params[PARAM_HEAD_SER_NUM_ALPHA].current
 
-
-    @Pyro4.expose
     def abort(self):
         """Abort acquisition.
 
@@ -1369,8 +1676,6 @@ class PVCamera(devices.FloatingDeviceMixin, devices.CameraDevice):
         _exp_abort(self.handle, CCS_HALT)
         self._acquiring = False
 
-
-    @Pyro4.expose
     def initialize(self):
         """Initialise the camera."""
         # Init the DLL if necessary.
@@ -1382,36 +1687,46 @@ class PVCamera(devices.FloatingDeviceMixin, devices.CameraDevice):
         # If no cameras detected, need to deinit DLL so it can be reinited to update count.
         if _cam_get_total().value == 0:
             _pvcam_uninit()
-            raise Exception ('No cameras detected.')
+            raise microscope.InitialiseError("No cameras detected.")
         # Connect to the camera.
-        self._logger.info("DLL version: %s" % _pvcam_get_ver().value)
+        _logger.info("DLL version: %s", _pvcam_get_ver().value)
         self._pv_name = _cam_get_name(self._index).value
-        self._logger.info('Initializing %s' % self._pv_name)
+        _logger.info("Initializing %s", self._pv_name)
         self.handle = _cam_open(self._pv_name, OPEN_EXCLUSIVE)
         PVCamera.open_cameras.append(self.handle)
+
         # Set up event callbacks. Tried to use the resume callback to reinit camera
         # after power loss, but any attempt to close/reopen the camera or deinit the
         # DLL throws a Windows Error 0xE06D7363.
         def _cb(event):
-            self._logger.info("Received %s event." % event)
-            if event == 'removed':
-                self._logger.critical("Can not re-init hardware. Exiting.")
+            _logger.info("Received %s event.", event)
+            if event == "removed":
+                _logger.critical("Can not re-init hardware. Exiting.")
                 exit(-1)
             return
-        self._cbs = {'check': CALLBACK(lambda: _cb('check')),
-                     'resumed': CALLBACK(lambda: _cb('resumed')),
-                     'removed': CALLBACK(lambda: _cb('removed'))}
-        _cam_register_callback(self.handle, PL_CALLBACK_CHECK_CAMS, self._cbs['check'])
-        _cam_register_callback(self.handle, PL_CALLBACK_CAM_REMOVED, self._cbs['removed'])
-        _cam_register_callback(self.handle, PL_CALLBACK_CAM_RESUMED, self._cbs['resumed'])
+
+        self._cbs = {
+            "check": CALLBACK(lambda: _cb("check")),
+            "resumed": CALLBACK(lambda: _cb("resumed")),
+            "removed": CALLBACK(lambda: _cb("removed")),
+        }
+        _cam_register_callback(
+            self.handle, PL_CALLBACK_CHECK_CAMS, self._cbs["check"]
+        )
+        _cam_register_callback(
+            self.handle, PL_CALLBACK_CAM_REMOVED, self._cbs["removed"]
+        )
+        _cam_register_callback(
+            self.handle, PL_CALLBACK_CAM_RESUMED, self._cbs["resumed"]
+        )
         # Repopulate _params.
         self._params = {}
-        # Add chip before anything else, as chip name is used to add missing enums.
-        self._params[PARAM_CHIP_NAME] = PVParam(self, PARAM_CHIP_NAME)
-        for (param_id, name) in _param_to_name.items():
-            if param_id in self._params:
+        for param_id, name in _param_to_name.items():
+            try:
+                p = PVParam.factory(self, param_id)
+            except:
+                _logger.warn("Skipping unsupported parameter %s.", name)
                 continue
-            p = PVParam(self, param_id)
             if not p.dtype or not p.available:
                 continue
             self._params[param_id] = p
@@ -1423,135 +1738,171 @@ class PVCamera(devices.FloatingDeviceMixin, devices.CameraDevice):
                 # Raise these here, as the message is a tuple, not a str.
                 raise
             except Exception as err:
-                if not err.message.startswith('pvcam error 49'):
-                    self._logger.warn("Skipping parameter %s: not supported in python." % (p.name), exc_info=err.message)
+                # Test on err.args prevents indexing into empty tuple.
+                if err.args and not err.args[0].startswith("pvcam error 49"):
+                    _logger.warn(
+                        "Skipping parameter %s: not supported" " in python.",
+                        p.name,
+                    )
                     continue
-            self.add_setting(p.name,
-                             p.dtype,
-                             lambda p=p: p.current,
-                             p.set_value,
-                             lambda p=p: p.values,
-                             not p.access in [ACC_READ_WRITE, ACC_WRITE_ONLY])
+            self.add_setting(
+                p.name,
+                p.dtype,
+                lambda p=p: p.current,
+                p.set_value
+                if p.access in [ACC_READ_WRITE, ACC_WRITE_ONLY]
+                else None,
+                lambda p=p: p.values,
+            )
         if PARAM_GAIN_MULT_FACTOR in self._params:
-            self.add_setting('gain',
-                             self._params[PARAM_GAIN_MULT_FACTOR].dtype,
-                             lambda: self._params[PARAM_GAIN_MULT_FACTOR].current,
-                             self._params[PARAM_GAIN_MULT_FACTOR].set_value,
-                             self._params[PARAM_GAIN_MULT_FACTOR].values)
+            self.add_setting(
+                "gain",
+                self._params[PARAM_GAIN_MULT_FACTOR].dtype,
+                lambda: self._params[PARAM_GAIN_MULT_FACTOR].current,
+                self._params[PARAM_GAIN_MULT_FACTOR].set_value,
+                self._params[PARAM_GAIN_MULT_FACTOR].values,
+            )
 
         if PARAM_PMODE in self._params:
-            self.add_setting('frame transfer mode',
-                             self._params[PARAM_PMODE].dtype,
-                             lambda: self._params[PARAM_PMODE].current,
-                             self._params[PARAM_PMODE].set_value,
-                             self._params[PARAM_PMODE].values)
+            self.add_setting(
+                "frame transfer mode",
+                self._params[PARAM_PMODE].dtype,
+                lambda: self._params[PARAM_PMODE].current,
+                self._params[PARAM_PMODE].set_value,
+                self._params[PARAM_PMODE].values,
+            )
 
-        self.shape = (self._params[PARAM_PAR_SIZE].current, self._params[PARAM_SER_SIZE].current)
-        self.roi = (0, 0, self.shape[0], self.shape[1])
+        self.shape = (
+            self._params[PARAM_PAR_SIZE].current,
+            self._params[PARAM_SER_SIZE].current,
+        )
+        self.roi = microscope.ROI(0, 0, self.shape[0], self.shape[1])
 
         # Populate readout modes by iterating over readout ports and speed
         # table entries.
         ro_ports = self._params[PARAM_READOUT_PORT].values
+        self._readout_mode = 0  # The index of the current readout mode
         self._readout_modes = []
-        self._readout_mode_parameters = {}
-        for i, port in ro_ports:
+        self._readout_mode_parameters = []
+        for i, port in ro_ports.items():
             self._params[PARAM_READOUT_PORT].set_value(i)
             ro_speeds = self._params[PARAM_SPDTAB_INDEX].values
-            for j in range(ro_speeds[0], ro_speeds[1]+1):
+            for j in range(ro_speeds[0], ro_speeds[1] + 1):
                 self._params[PARAM_SPDTAB_INDEX].set_value(j)
                 bit_depth = self._params[PARAM_BIT_DEPTH].current
                 freq = 1e9 / self._params[PARAM_PIX_TIME].current
                 if freq > 1e6:
                     freq *= 1e-6
-                    prefix = 'M'
+                    prefix = "M"
                 elif freq > 1e3:
                     freq *= 1e-3
-                    prefix = 'k'
+                    prefix = "k"
                 else:
-                    prefix = 'Hz'
-                mode_str = "%s, %s-bit, %s %sHz" % (port, bit_depth, freq, prefix)
+                    prefix = "Hz"
+                mode_str = "%s, %s-bit, %s %sHz" % (
+                    port,
+                    bit_depth,
+                    freq,
+                    prefix,
+                )
                 self._readout_modes.append(mode_str)
-                self._readout_mode_parameters[mode_str] = {'port':i, 'spdtab_index': j}
+                self._readout_mode_parameters.append(
+                    {"port": i, "spdtab_index": j}
+                )
         # Set to default mode.
-        self.set_readout_mode(self._readout_modes[0])
+        self._set_readout_mode(self._readout_mode)
+        self.add_setting(
+            "readout mode",
+            "enum",
+            lambda: self._readout_mode,
+            self._set_readout_mode,
+            lambda: self._readout_modes,
+        )
         self._params[PARAM_CLEAR_MODE].set_value(CLEAR_PRE_EXPOSURE_POST_SEQ)
 
-
-    @Pyro4.expose
-    @keep_acquiring
-    def set_readout_mode(self, description):
+    @microscope.abc.keep_acquiring
+    def _set_readout_mode(self, index):
         """Set the readout mode and transform."""
-        params = self._readout_mode_parameters[description]
-        self._params[PARAM_READOUT_PORT].set_value(params['port'])
-        self._params[PARAM_SPDTAB_INDEX].set_value(params['spdtab_index'])
-        self._readout_mode = description
+        params = self._readout_mode_parameters[index]
+        self._params[PARAM_READOUT_PORT].set_value(params["port"])
+        self._params[PARAM_SPDTAB_INDEX].set_value(params["spdtab_index"])
+        self._readout_mode = index
         # Update transforms, if available.
         chip = self._params[PARAM_CHIP_NAME].current
         new_readout_transform = None
         readout_map = READOUT_TRANSFORMS.get(chip, None)
         if readout_map:
-            new_readout_transform = readout_map.get(params['port'], None)
+            new_readout_transform = readout_map.get(params["port"], None)
         if new_readout_transform:
             self._set_readout_transform(new_readout_transform)
 
-
-    @Pyro4.expose
-    def make_safe(self):
-        """Put the camera into a safe state.
-
-        Safe means (at least):
-         * it won't sustain damage if light falls on the sensor."""
-        if self._acquiring:
-            self.abort()
-
-
-    @Pyro4.expose
-    @keep_acquiring
+    @microscope.abc.keep_acquiring
     def set_exposure_time(self, value):
         """Set the exposure time to value."""
         self.exposure_time = value
 
-
-    @Pyro4.expose
     def get_exposure_time(self):
         """Return the current exposure time.
 
         Just return self.exposure_time, which is updated with the real
-        value during _on_enable."""
+        value during _do_enable."""
         return self.exposure_time
 
-
-    @Pyro4.expose
     def get_cycle_time(self):
         """Return the cycle time.
 
         Just return self.cycle_time, which is updated with the real
-        value during _on_enable."""
+        value during _do_enable."""
         return self.cycle_time
 
-
-    @Pyro4.expose
-    def get_trigger_type(self):
-        """Return the current trigger type."""
-        return TRIGGER_MODES[self._trigger].microscope_mode
-
-
-    @Pyro4.expose
     @Pyro4.oneway
     def soft_trigger(self):
         """Expose software triggering to a client.
 
+        Deprecated, use trigger().
+
         Trigger an exposure in TRIG_SOFT mode.
         Log some debugging stats in other trigger modes."""
         if self._trigger == TRIG_SOFT:
-            self._logger.debug("Received soft trigger ...")
-            _exp_start_seq(self.handle, self._buffer.ctypes.data_as(ctypes.c_void_p))
+            _logger.debug("Received soft trigger ...")
+            _exp_start_seq(
+                self.handle, self._buffer.ctypes.data_as(ctypes.c_void_p)
+            )
         else:
             cstatus, cbytes, cframes = _exp_check_cont_status(self.handle)
             status, bytes = _exp_check_status(self.handle)
 
-            self._logger.debug("Status checks\ncheck_cont:   %s \t bytes: %d\tframes: %d\n"  \
-                               "check_status: %s \t bytes: %d\t" \
-                               % (STATUS_STRINGS[cstatus.value], cbytes.value, cframes.value,
-                                  STATUS_STRINGS[status.value], bytes.value))
+            _logger.debug(
+                "Status checks\n"
+                "check_cont:   %s \t bytes: %d\tframes: %d\n"
+                "check_status: %s \t bytes: %d\t",
+                STATUS_STRINGS[cstatus.value],
+                cbytes.value,
+                cframes.value,
+                STATUS_STRINGS[status.value],
+                bytes.value,
+            )
         return
+
+    @property
+    def trigger_mode(self) -> microscope.TriggerMode:
+        return PV_MODE_TO_TRIGGER[self._trigger][1]
+
+    @property
+    def trigger_type(self) -> microscope.TriggerType:
+        return PV_MODE_TO_TRIGGER[self._trigger][0]
+
+    def set_trigger(
+        self, ttype: microscope.TriggerType, tmode: microscope.TriggerMode
+    ) -> None:
+        try:
+            self._trigger = TRIGGER_TO_PV_MODE[(ttype, tmode)]
+        except KeyError:
+            raise microscope.UnsupportedFeatureError(
+                "no PVCam mode for %s and %s" % (ttype, tmode)
+            )
+
+    def _do_trigger(self) -> None:
+        _exp_start_seq(
+            self.handle, self._buffer.ctypes.data_as(ctypes.c_void_p)
+        )

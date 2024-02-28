@@ -1,7 +1,8 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 
-## Copyright (C) 2017 David Pinto <david.pinto@bioch.ox.ac.uk>
+## Copyright (C) 2020 David Miguel Susano Pinto <carandraug@gmail.com>
+##
+## This file is part of Microscope.
 ##
 ## Microscope is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -23,26 +24,25 @@ import time
 
 import numpy
 
+
 def test_mirror_actuators(dm, time_interval=0.5):
-  """Iterate over all actuators of a deformable mirror.
+    """Iterate over all actuators of a deformable mirror.
 
-  Parameters
-  ----------
-    dm : microscope.device.DeformableMirror
-      The mirror to test
-    time_interval : number
-      Number of seconds between trying each actuator.
-  """
-  base_value = 0.5
-  data = numpy.full((dm.n_actuators), base_value)
-  dm.apply_pattern(data)
+    Args:
+        dm (microscope.abc.DeformableMirror): The mirror to test.
+        time_interval (float): Number of seconds between trying each
+            actuator.
+    """
+    base_value = 0.5
+    data = numpy.full((dm.n_actuators), base_value)
+    dm.apply_pattern(data)
 
-  time.sleep(time_interval)
-  for new_value in [1.0, 0.0]:
-    for i in range(dm.n_actuators):
-      data[i] = new_value
-      dm.apply_pattern(data)
-      time.sleep(time_interval)
-      data[i] = base_value
+    time.sleep(time_interval)
+    for new_value in [1.0, 0.0]:
+        for i in range(dm.n_actuators):
+            data[i] = new_value
+            dm.apply_pattern(data)
+            time.sleep(time_interval)
+            data[i] = base_value
 
-  dm.apply_pattern(data)
+    dm.apply_pattern(data)
