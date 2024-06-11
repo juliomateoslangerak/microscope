@@ -1205,13 +1205,13 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         """Return a tuple of `(width, height)` corresponding to the shape of the SLM"""
         return self._get_shape()
 
-    def _validate_patterns(self, patterns: numpy.ndarray, wavelengths: typing.List[int]) -> None:
+    def _validate_patterns(self, patterns: numpy.ndarray, wavelengths: typing.Union[list[int], int]) -> None:
         """Validate the shape of a series of patterns.
 
         Only validates the shape of the patterns, not if the values
         are actually in the [0 1] range.  If some hardware is unable
         to handle values outside their defined range (most will simply
-        clip them), then it's the responsability of the subclass to do
+        clip them), then it's the responsibility of the subclass to do
         the clipping before sending the values.
 
         """
@@ -1219,12 +1219,19 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             raise ValueError(
                 "PATTERNS has %d dimensions (must be 2 or 3)" % patterns.ndim
             )
-        elif len(wavelengths) != patterns.shape[0]:
+
+        if patterns.ndim == 3:
+            if not isinstance(wavelengths, list) or len(wavelengths) != patterns.shape[0]:
+                raise ValueError(
+                    "The length of the wavelengths list %d does not match the number of patterns to load %d"
+                    % (len(wavelengths), patterns.shape[0],)
+                )
+        elif not isinstance(wavelengths, int):
             raise ValueError(
-                "The length of the wavelengths list %d does not match the number of patterns to load %d"
-                % (len(wavelengths), patterns.shape[0],)
+                "The wavelength should be an integer when loading a single pattern"
             )
-        elif (patterns.shape[-2], patterns.shape[-1]) != self.get_shape():
+
+        if (patterns.shape[-2], patterns.shape[-1]) != self.get_shape():
             raise ValueError(
                 "PATTERNS shape %s does not match the SLM's shape %s"
                 % ((patterns.shape[-2], patterns.shape[-1],), self.get_shape(),)
