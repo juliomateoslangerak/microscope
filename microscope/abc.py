@@ -1199,6 +1199,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def _get_shape(self) -> typing.Tuple[int, int]:
+        """Get the shape of the SLM in pixels as a (width, height) tuple."""
         raise NotImplementedError
 
     def get_shape(self) -> typing.Tuple[int, int]:
