@@ -1188,7 +1188,6 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
     The private properties `_patterns` and `_pattern_idx` are
     initialized to `None` to support the queueing of patterns and
     software triggering.
-
     """
 
     @abc.abstractmethod
@@ -1199,11 +1198,10 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def _get_shape(self) -> typing.Tuple[int, int]:
-        """Return a tuple of `(width, height)` indicating shape in pixels."""
         raise NotImplementedError
 
     def get_shape(self) -> typing.Tuple[int, int]:
-        """Return a tuple of `(width, height)`"""
+        """Return a tuple of `(width, height)` corresponding to the shape of the SLM"""
         return self._get_shape()
 
     def _validate_patterns(self, patterns: numpy.ndarray, wavelengths: typing.List[int]) -> None:
