@@ -1079,7 +1079,7 @@ class DeformableMirror(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         Only validates the shape of the patterns, not if the values
         are actually in the [0 1] range.  If some hardware is unable
         to handle values outside their defined range (most will simply
-        clip them), then it's the responsability of the subclass to do
+        clip them), then it's the responsibility of the subclass to do
         the clipping before sending the values.
 
         """
