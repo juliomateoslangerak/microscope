@@ -1272,7 +1272,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         Args:
             patterns: An `NXY` elements array of phase values in the range
             [0, 1]. 0=0pi and 1=2pi. N is the number of phases to add the queue
-            wavelengths: A list of wavelengths of length N
+            wavelengths: A list of wavelengths (in nm) of length N
 
         A convenience fallback is provided for software triggering is provided.
 
