@@ -1281,7 +1281,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         self._patterns = patterns
         self._wavelengths = wavelengths
         self._pattern_idx = -1  # none is applied yet
-        self._run_patterns()  # TODO: How do we specify if
+        # TODO: What is the function to run the patterns in the queue? enable?
 
     def _do_trigger(self) -> None:
         """Convenience fallback.
