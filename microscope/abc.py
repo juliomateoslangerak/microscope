@@ -1195,6 +1195,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         super().__init__(**kwargs)
         self._patterns: typing.Optional[numpy.ndarray] = None
         self._pattern_idx: int = -1
+        self._wavelengths: typing.Optional[typing.List[int]] = None
 
     @abc.abstractmethod
     def _get_shape(self) -> typing.Tuple[int, int]:
@@ -1254,7 +1255,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             raise microscope.IncompatibleStateError(
                 "apply_pattern requires software trigger type"
             )
-        self._validate_patterns(pattern)
+        self._validate_patterns(pattern, [wavelength])
         self._do_apply_pattern(pattern, wavelength)
 
     def queue_patterns(self, patterns: numpy.ndarray, wavelengths: typing.List[int]) -> None:
@@ -1270,6 +1271,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         """
         self._validate_patterns(patterns, wavelengths)
         self._patterns = patterns
+        self._wavelengths = wavelengths
         self._pattern_idx = -1  # none is applied yet
         self._run_patterns()  # TODO: How do we specify if
 
@@ -1293,7 +1295,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         if self._patterns is None:
             raise microscope.DeviceError("no pattern queued to apply")
         self._pattern_idx += 1
-        self.apply_pattern(self._patterns[self._pattern_idx, :])
+        self.apply_pattern(self._patterns[self._pattern_idx, :], self._wavelengths[self._pattern_idx])
 
     def trigger(self) -> None:
         """Apply the next pattern in the queue."""
