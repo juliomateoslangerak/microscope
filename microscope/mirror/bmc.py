@@ -24,12 +24,11 @@ import ctypes
 import os
 import warnings
 
-import numpy
+import numpy as np
 
 import microscope
 import microscope._utils
 import microscope.abc
-
 
 try:
     import microscope._wrappers.BMC as BMC
@@ -63,7 +62,7 @@ class BMCDeformableMirror(
     def n_actuators(self) -> int:
         return self._dm.ActCount
 
-    def _do_apply_pattern(self, pattern: numpy.ndarray) -> None:
+    def _do_apply_pattern(self, pattern: np.ndarray) -> None:
         data_pointer = pattern.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         status = BMC.SetArray(self._dm, data_pointer, None)
         if status:

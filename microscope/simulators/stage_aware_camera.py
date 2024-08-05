@@ -23,7 +23,7 @@
 
 import logging
 import time
-import typing
+from typing import Dict, Optional
 
 import numpy as np
 import PIL.Image
@@ -36,7 +36,6 @@ from microscope.simulators import (
     SimulatedFilterWheel,
     SimulatedStage,
 )
-
 
 _logger = logging.getLogger(__name__)
 
@@ -95,7 +94,7 @@ class StageAwareCamera(SimulatedCamera):
             values=(0.0, float("inf")),
         )
 
-    def _fetch_data(self) -> typing.Optional[np.ndarray]:
+    def _fetch_data(self) -> Optional[np.ndarray]:
         if not self._acquiring or self._triggered == 0:
             return None
 
@@ -160,7 +159,7 @@ class StageAwareCamera(SimulatedCamera):
 
 def simulated_setup_from_image(
     filepath: str, **kwargs
-) -> typing.Dict[str, microscope.abc.Device]:
+) -> Dict[str, microscope.abc.Device]:
     """Create simulated devices given an image file.
 
     To use with the `device-server`::

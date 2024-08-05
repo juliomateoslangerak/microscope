@@ -45,13 +45,12 @@ import logging
 import math
 import sys
 import threading
-import typing
+from typing import Callable, Dict, List, Optional, Tuple, Type
 
 import numpy as np
 
 import microscope
 import microscope.abc
-
 
 try:
     import microscope._wrappers.dcamapi4 as dcam
@@ -134,7 +133,7 @@ def _status_to_error(status: int) -> str:
     return "{}[{:#010x}]".format(name, status & 0x8FFFFFFF)
 
 
-def _call(f: typing.Callable[..., int], *args) -> None:
+def _call(f: Callable[..., int], *args) -> None:
     """Call a C function from dcamapi4.
 
     This is an helper function for the most typical case of checking
@@ -150,7 +149,7 @@ def _call(f: typing.Callable[..., int], *args) -> None:
 
 
 def _create_struct_with_size(
-    stype: typing.Type[ctypes.Structure],
+    stype: Type[ctypes.Structure],
 ) -> ctypes.Structure:
     s = stype()
     s.size = ctypes.sizeof(stype)
@@ -158,7 +157,7 @@ def _create_struct_with_size(
 
 
 def _create_struct_with_cbSize(
-    stype: typing.Type[ctypes.Structure],
+    stype: Type[ctypes.Structure],
 ) -> ctypes.Structure:
     s = stype()
     s.cbSize = ctypes.sizeof(stype)
@@ -167,7 +166,7 @@ def _create_struct_with_cbSize(
 
 def _create_devstring_with_length(
     nbytes: int,
-) -> typing.Tuple[dcam.DEV_STRING, ctypes.c_char]:
+) -> Tuple[dcam.DEV_STRING, ctypes.c_char]:
     # FIXME: the type annotation is not quite right, we actually
     #        return a ctypes array of c_char as the second value.
     devstr = _create_struct_with_size(dcam.DEV_STRING)
@@ -498,14 +497,14 @@ class HamamatsuCamera(microscope.abc.Camera):
 
     def _init_method_get_prop_values(
         self, prop_attr: dcam.PROP_ATTR
-    ) -> typing.Dict[int, str]:
+    ) -> Dict[int, str]:
         strbuf = ctypes.create_string_buffer(64)
         vtxt = _create_struct_with_cbSize(dcam.PROP_VALUETEXT)
         vtxt.iProp = prop_attr.iProp
         vtxt.text = ctypes.cast(ctypes.pointer(strbuf), ctypes.c_char_p)
         vtxt.textbytes = ctypes.sizeof(strbuf)
 
-        val2txt: typing.Dict[int, str] = {}
+        val2txt: Dict[int, str] = {}
         next_value = ctypes.c_double(prop_attr.valuemin)
         while next_value.value <= prop_attr.valuemax:
             vtxt.value = next_value.value
@@ -681,7 +680,7 @@ class HamamatsuCamera(microscope.abc.Camera):
     def get_cycle_time(self) -> float:
         return self._get_real_property(dcam.IDPROP.TIMING_MINTRIGGERINTERVAL)
 
-    def _get_sensor_shape(self) -> typing.Tuple[int, int]:
+    def _get_sensor_shape(self) -> Tuple[int, int]:
         return self._sensor_shape
 
     def _get_binning(self) -> microscope.Binning:
@@ -733,7 +732,7 @@ class HamamatsuCamera(microscope.abc.Camera):
     def _set_roi(self, roi: microscope.ROI) -> None:
         pass
 
-    def _fetch_data(self) -> typing.Optional[np.ndarray]:
+    def _fetch_data(self) -> Optional[np.ndarray]:
         _logger.debug("Start waiting for FRAMEREADY")
         status = dcam.wait_start(
             self._wait_open.hwait, ctypes.byref(self._wait_start)
@@ -766,7 +765,7 @@ class HamamatsuCamera(microscope.abc.Camera):
 
     def _get_trigger_combo(
         self,
-    ) -> typing.Tuple[microscope.TriggerType, microscope.TriggerMode]:
+    ) -> Tuple[microscope.TriggerType, microscope.TriggerMode]:
         source = self._get_long_property(dcam.IDPROP.TRIGGERSOURCE)
         if source == dcam.PROPMODEVALUE.TRIGGERSOURCE__SOFTWARE:
             return (
@@ -858,8 +857,8 @@ def _list_devices() -> None:
     """Print all available Hamamatsu devices and some of their info."""
     api = _DCAM_API()
 
-    models: typing.List[str] = []
-    cids: typing.List[str] = []
+    models: List[str] = []
+    cids: List[str] = []
 
     devstr, devstrbuf = _create_devstring_with_length(64)
     for i in range(api.n_devices):
@@ -906,10 +905,10 @@ def _list_properties(index: int) -> None:
     hdcam = sopen.hdcam
 
     # Collect all the strings to pretty print later.
-    ids: typing.List[str] = []
-    names: typing.List[str] = []
-    rws: typing.List[str] = []
-    values: typing.List[str] = []
+    ids: List[str] = []
+    names: List[str] = []
+    rws: List[str] = []
+    values: List[str] = []
 
     # There is no property with ID zero, it is reserved, so we start
     # at ID zero and loop to the next until there is no next property.
@@ -1007,7 +1006,7 @@ def _list_properties(index: int) -> None:
         _logger.warning("failed to close device during shutdown")
 
 
-def _main(argv: typing.List[str]) -> int:
+def _main(argv: List[str]) -> int:
     prog_name = "microscope.cameras.hamamatsu"
     parser = argparse.ArgumentParser(prog=prog_name)
     subparsers = parser.add_subparsers(
