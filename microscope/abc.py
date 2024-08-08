@@ -30,7 +30,7 @@ import threading
 import time
 from enum import EnumMeta
 from threading import Thread
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, Union
 
 import numpy as np
 import Pyro4
@@ -1192,20 +1192,21 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._patterns: typing.Optional[numpy.ndarray] = None
-        self._pattern_idx: int = -1
-        self._wavelengths: typing.Optional[typing.List[int]] = None
+        self._patterns: Optional[np.ndarray] = None
+        self._pattern_idx: int = None
+        self._wavelengths: Optional[List[int]] = None
+        self._shape: Tuple[int, int] = None
 
     @abc.abstractmethod
-    def _get_shape(self) -> typing.Tuple[int, int]:
+    def _get_shape(self) -> Tuple[int, int]:
         """Get the shape of the SLM in pixels as a (width, height) tuple."""
         raise NotImplementedError
 
-    def get_shape(self) -> typing.Tuple[int, int]:
+    def get_shape(self) -> Tuple[int, int]:
         """Return a tuple of `(width, height)` corresponding to the shape of the SLM"""
         return self._get_shape()
 
-    def _validate_patterns(self, patterns: numpy.ndarray, wavelengths: typing.Union[list[int], int]) -> None:
+    def _validate_patterns(self, patterns: np.ndarray, wavelengths: Union[list[int], int]) -> None:
         """Validate the shape of a series of patterns.
 
         Only validates the shape of the patterns, not if the values
@@ -1238,16 +1239,17 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             )
 
     @abc.abstractmethod
-    def _do_apply_pattern(self, pattern: numpy.ndarray, wavelength: int) -> None:
+    def _do_apply_pattern(self, pattern: np.ndarray, wavelength: int) -> None:
         raise NotImplementedError()
 
-    def apply_pattern(self, pattern: numpy.ndarray, wavelength: int) -> None:
+    def apply_pattern(self, pattern: np.ndarray, wavelength: int = None) -> None:
         """Apply this pattern.
 
         Args:
             pattern: A 'XY' ndarray with the phases to be loaded into the SLM. The phases have to be
             in the range [0, 1]. 0=0pi and 1=2pi
-            wavelength: The wavelength to which the SLM has to be calibrated for that pattern
+            wavelength: The wavelength to which the SLM has to be calibrated for that pattern. If no
+            wavelength is provided, the SLM will be calibrated to the last wavelength used.
 
         Raises:
             microscope.IncompatibleStateError: if device trigger type is
@@ -1265,12 +1267,12 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         self._validate_patterns(pattern, [wavelength])
         self._do_apply_pattern(pattern, wavelength)
 
-    def queue_patterns(self, patterns: numpy.ndarray, wavelengths: typing.List[int]) -> None:
+    def queue_patterns(self, patterns: np.ndarray, wavelengths: List[int]) -> None:
         """Send a set of patterns to the SLM.
 
         Args:
             patterns: An `NXY` elements array of phase values in the range
-            [0, 1]. 0=0pi and 1=2pi. N is the number of phases to add the queue
+            [0.0, 1.0]. 0=0pi and 1=2pi. N is the number of phases to add the queue
             wavelengths: A list of wavelengths (in nm) of length N
 
         A convenience fallback is provided for software triggering is provided.
@@ -1309,6 +1311,11 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         # This is just a passthrough to the TriggerTargetMixin class
         # and only exists for the docstring.
         return super().trigger()
+
+    def get_pattern_idx(self) -> int:
+        """Return the index of the pattern that is currently being displayed."""
+        # TODO: this function is not implemented in the Mirror class. How is it done?
+        return self._pattern_idx
 
 
 class LightSource(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
