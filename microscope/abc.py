@@ -1267,13 +1267,14 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         self._validate_patterns(pattern, [wavelength])
         self._do_apply_pattern(pattern, wavelength)
 
-    def queue_patterns(self, patterns: np.ndarray, wavelengths: List[int]) -> None:
+    def queue_patterns(self, patterns: np.ndarray, wavelengths: Union[List[int], int]) -> None:
         """Send a set of patterns to the SLM.
 
         Args:
             patterns: An `NXY` elements array of phase values in the range
             [0.0, 1.0]. 0=0pi and 1=2pi. N is the number of phases to add the queue
-            wavelengths: A list of wavelengths (in nm) of length N
+            wavelengths: A list of wavelengths (in nm) of length N or a single wavelength (int) to
+            be applied to all the patterns.
 
         A convenience fallback is provided for software triggering is provided.
 
