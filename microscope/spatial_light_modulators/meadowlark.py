@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
+import logging
 import threading
+from abc import ABC, abstractmethod
 
 ## Copyright (C) 2024 Julio Mateos Langerak <julio.mateos-langerak@igh.cnrs.fr>
 ##
@@ -19,7 +21,8 @@ import threading
 ## along with Microscope.  If not, see <http://www.gnu.org/licenses/>.
 
 import microscope.abc
-from microscope import DeviceError, InitialiseError, Err
+from microscope import DeviceError, IncompatibleStateError, InitialiseError, DisabledDeviceError, UnsupportedFeatureError, LibraryLoadError
+from microscope import TriggerType, TriggerMode
 
 import os.path
 from cffi import FFI
@@ -54,7 +57,7 @@ CLASS_NAME = "BNSDevice_ODP"
 def requires_slm(func):
     def wrapper(self, *args, **kwargs):
         if not self._constructed_okay:
-            raise MicroscopeError("SLM is not initialized.")
+            raise DisabledDeviceError("SLM is not initialized.")
         else:
             return func(self, *args, **kwargs)
 
@@ -88,13 +91,13 @@ def transform_16_to_8_bit(array, fitting=None):
         raise ValueError("The datatype is neither uint8 or uint16")
 
 
-class MeadowlarkSLM(microscope.abc.SpatialLightModulator):
+class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
     """Meadowlark Spatial Light Modulator.
 
     This microscope device is for controlling Meadowlark Optics' Spatial Light
     Modulators (formerly Boulder Non-Linear).
     Important note: The header defs is a text file containing the headers from
-    the Blink_SDK.h file with some modifications. Namely all #include and #ifdef have been
+    the Blink_SDK.h file with some modifications. Namely, all #include and #ifdef have been
     removed.
 
     :param header_definitions_path: Absolute path to the header definitions from the SDK.
@@ -136,7 +139,7 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator):
 
         self._slm_handle = None
 
-        self._transient_images = []
+        self._transient_patterns = []
 
         # Get the SDK library
         try:
@@ -148,13 +151,16 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator):
             raise e(f'Unable to open "{header_definitions_path}"') from e
         finally:
             if cdef_from_file == "" or cdef_from_file is None:
-                print(f'File "{header_definitions_path}" is empty')
+                logging.error(f'File "{header_definitions_path}" is empty')
                 exit(3)
 
         # Create here the interface to the SDK
         self._ffi = FFI()
-        self._ffi.cdef(cdef_from_file, override=True)
-        self._blink_sdk = self._ffi.dlopen(blink_sdk_dll_path)
+        try:
+            self._ffi.cdef(cdef_from_file, override=True)
+            self._blink_sdk = self._ffi.dlopen(blink_sdk_dll_path)
+        except Exception as e:
+            raise LibraryLoadError(e) from e
 
         # Basic SLM parameters required for initialization
         # The board makes reference to the board id in case there are more than one SLM.
@@ -192,23 +198,26 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator):
                     self._phase_calibration_files_path, self._default_static_lut_file
                 ),
             )
+            
+        # Trigger parameters
 
         self.initialize()
 
-        if self._shape == (512, 512):
-
         # Verify construction of resources
         if int(self._blink_sdk.Is_slm_transient_constructed(self._slm_handle)):
-            raise MicroscopeError(
+            raise InitialiseError(
                 "Overdrive  frame calculation  engine  was not properly  constructed"
             )
 
         # Load the default LUT
         self._load_lut(self._default_lut_file)
 
-        # A thread for running the patterns and a boolean to control it.
+        # Two threads for running the patterns and a boolean to control it.
+        # One thread is for running the patterns in the hardware and the other
+        # is for running the patterns in the software.
         self._pattern_running = False
-        self._pattern_running_thread = threading.Thread(target=self._run_pattern)
+        self._hw_pattern_running_thread = threading.Thread(target=self._hw_run_pattern)
+        self._sw_pattern_running_thread = threading.Thread(target=self._sw_run_pattern)
 
         # Boolean to control triggers use
         self._wait_for_trigger = self._ffi.cast("int", 0)
@@ -223,7 +232,7 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator):
             name="trigger_timeout_ms",
             dtype="int",
             get_func=lambda: self._trigger_timeout_ms,
-            set_func=lambda x: self._set_trigger_timeout_ms(x),
+            set_func=self._set_trigger_timeout_ms,
             values=lambda: (0, 2**16),
             readonly=lambda: False,
         )
@@ -232,27 +241,25 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator):
             name="max_transients",
             dtype="int",
             get_func=lambda: self._max_transients,
-            set_func=lambda x: self._set_max_transients(x),
+            set_func=self._set_max_transients,
             values=lambda: (0, 2**8),
-            readonly=lambda: True,
+            readonly=lambda: False,
         )
 
         self.add_setting(
             name="SLM_temperature",
             dtype="float",
-            get_func=lambda: self._get_temperature(),
-            set_func=lambda x: None,
+            get_func=self._get_temperature,
+            set_func=None,
             values=lambda: "This setting is read only. It returns the temperature of the SLM",
-            readonly=lambda: True,
         )
 
         self.add_setting(
             name="version_info",
             dtype="str",
             get_func=lambda: self._get_version_info(),
-            set_func=lambda x: None,
+            set_func=None,
             values=lambda: "Returns the version information of the SLM",
-            readonly=lambda: True,
         )
 
         self.add_setting(
@@ -316,28 +323,42 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator):
 
         except Exception as e:
             raise InitialiseError("Could not Initialize") from e
+    
+    @property
+    def trigger_mode(self) -> microscope.TriggerMode:
+        return TriggerMode.ONCE
+    
+    @property
+    def trigger_type(self) -> microscope.TriggerType:
+        if self._wait_for_trigger:
+            return TriggerType.FALLING_EDGE
+        else:
+            return TriggerType.SOFTWARE
+        
+    def set_trigger(
+        self, ttype: microscope.TriggerType, tmode: microscope.TriggerMode
+    ) -> None:
+        if self._pattern_running:
+            raise IncompatibleStateError(
+                "Cannot set trigger while a sequence of patterns is running."
+                "Stop the sequence before setting the trigger type by disabling the device."
+            )
+        if tmode != TriggerMode.ONCE:
+            raise UnsupportedFeatureError(
+                "Only TriggerMode.ONCE is supported by this SLM"
+            )
 
+        self._wait_for_trigger = 0 if ttype == TriggerType.SOFTWARE else 1
+    
     @requires_slm
     def _get_shape(self):
         return self._shape
-
-    @requires_slm
-    def _do_enable(self):
-        raise NotImplemented()
-
-    def _do_disable(self):
-        raise NotImplemented()
 
     def _do_shutdown(self) -> None:
         _r = self._blink_sdk.Delete_SDK(self._slm_handle)
         if int(_r):
             raise DeviceError(self._get_last_error())
         self._constructed_okay[0] = 0
-
-    @property
-    @requires_slm
-    def temperature(self):  # TODO: this is not implemented
-        return 20
 
     @requires_slm
     def _load_lut(self, filename):
@@ -357,7 +378,7 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator):
         if int(_r):
             raise DeviceError(self._get_last_error())
 
-    def load_wavelength_lut(self, wavelength):
+    def _load_wavelength_lut(self, wavelength):
         """Loads the LUT to the SLM that fits the best for a specified wavelength"""
         # Load the default LUT
         lut_wavelengths = self._luts.keys()
@@ -366,107 +387,35 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator):
             self._phase_calibration_files_path, self._luts[nearest]
         )
         self._load_lut(lut_file)
-        return None
-    #
-    # def write_cal(self, type, calImage):
-    #     """A pass through for old SDK compatibility"""
-    #     return self.write_image(calImage)
 
-    def _write_image(self, image):
+    @abstractmethod
+    def _write_pattern(self, pattern):
+        """This function should be implemented in the subclasses"""
         raise NotImplemented()
 
     @requires_slm
-    def _do_apply_pattern(self, image, wavelength=None):
-        # TODO: define trigger types
+    def _do_apply_pattern(self, pattern, wavelength=None):
         if self._pattern_running:
-            raise Exception("Sequence is running. Cannot write single image")
+            raise Exception("Sequence is running. Cannot write single patterns")
 
         if wavelength is not None:
-            self.load_wavelength_lut(wavelength)
+            self._load_wavelength_lut(wavelength)
 
-        image = float_to_8_bit(image)
+        pattern = float_to_8_bit(pattern)
 
-        self._write_image(image)
+        self._write_pattern(pattern)
 
-    @requires_slm
-    def compute_transients(self, image):
-        print("Computing Transients")
-        byte_count = self._ffi.new("unsigned int*", 0)
-        self._blink_sdk.Calculate_transient_frames(
-            self._slm_handle, self._ffi.from_buffer(image), byte_count
-        )
-        transients = self._ffi.new("unsigned char[]", byte_count[0])
-        self._blink_sdk.Retrieve_transient_frames(self._slm_handle, transients)
-        return transients
+    @abstractmethod
+    def _hw_run_pattern(self):
+        """This function is running on a separate thread to write the patterns.
+        This function should be implemented in the subclasses"""
+        raise NotImplemented()
 
-    @requires_slm
-    def load_sequence(self, image_wavelength_list):
-        if len(image_wavelength_list) < 2:
-            raise Exception(
-                "load_sequence expects a list of two or more "
-                "images - it was passed %s images."
-                % len(image_wavelength_list)
-            )
-        # We pre-compute here the transient images
-        # Verify that the calculation engine is properly loaded
-        if self._blink_sdk.Is_slm_transient_constructed(self._slm_handle) < 0:
-            raise Exception(
-                "SLM transient calculation engine not properly constructed"
-            )
-        # Empty the list of transient images
-        self._transient_images = []
-        current_wavelength = None
-        for image, wavelength in image_wavelength_list:
-            if wavelength != current_wavelength:
-                self.load_wavelength_lut(wavelength)
-                current_wavelength = wavelength
-            if type(image) is np.ndarray:
-                image = transform_16_to_8_bit(image, fitting="up")
-                transients = self.compute_transients(image)
-                self._transient_images.append(transients)
-            else:
-                raise Exception(
-                    "Sequence of images is not in the right format"
-                )
-
-    @requires_slm
-    def start_sequence(self, external_trigger=True):
-        """Sequence wil restart if already running"""
-        print("Starting sequence")
-        self._wait_for_trigger = external_trigger
-        if self._pattern_running:
-            self.stop_sequence
-        self._pattern_running = True
-        self._pattern_running_thread.start()
-
-    def _run_pattern(self):
-        while self._pattern_running:
-            if self._transient_images:
-                for i, transients in enumerate(self._transient_images):
-                    if self._pattern_running:
-                        self._pattern_idx = i
-                        _r = self._blink_sdk.Write_transient_frames(
-                            self._slm_handle,
-                            self._board,
-                            transients,
-                            self._wait_for_trigger,
-                            self._external_pulse,
-                            self._trigger_timeout_ms,
-                        )
-                        # print(self._pattern_idx)
-                        if int(_r):
-                            print(self._get_last_error())
-                            self._pattern_running = False
-                            return
-                    else:
-                        return
-
-    @requires_slm
-    def stop_sequence(self):
-        self._pattern_running = False
-        self._blink_sdk.Stop_sequence(self._slm_handle)
-        self._pattern_running_thread.join()
-        print("sequence stopped")
+    @abstractmethod
+    def _sw_run_pattern(self):
+        """This function is running on a separate thread to write the patterns.
+        This function should be implemented in the subclasses"""
+        raise NotImplemented()
 
     def _set_trigger_timeout_ms(self, timeout_ms):
         self._trigger_timeout_ms = timeout_ms
@@ -481,6 +430,9 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator):
         return self._ffi.string(
             self._blink_sdk.Get_last_error_message(self._slm_handle)
         )
+
+    def _set_max_transients(self, max_transients):
+        self._max_transients = max_transients
 
     def _set_output_pulse_image_flip(self, output_pulse_image_flip):
         self._output_pulse_image_flip = output_pulse_image_flip
@@ -569,11 +521,15 @@ class SLM_512(MeadowlarkSLM):
             self._power_state = 0
             raise DeviceError(self._get_last_error())
 
+        # and if hardware we run from the in a separete thread
+        if self._transient_patterns:
+            self._start_sequence()
+
     def _do_disable(self):
         if self._power_state == 0:
             return
 
-    def _write_image(self, image):
+    def _write_pattern(self, image):
         _r = self._blink_sdk.Write_image(
             self._slm_handle,
             self._board,
@@ -585,6 +541,87 @@ class SLM_512(MeadowlarkSLM):
         )
         if int(_r):
             raise Exception(self._get_last_error())
+
+    @requires_slm
+    def _queue_patterns(self) -> None:
+        # Verify that the calculation engine is properly loaded
+        if self._blink_sdk.Is_slm_transient_constructed(self._slm_handle) < 0:
+            raise Exception(
+                "SLM transient calculation engine not properly constructed"
+            )
+
+        self._transient_patterns = []
+        current_wavelength = None
+
+        # If only a single wavelength is provided, use it for all patterns
+        if isinstance(self._wavelengths, int):
+            self._wavelengths = [self._wavelengths] * len(self._patterns)
+
+        for pattern, wavelength in zip(self._patterns, self._wavelengths):
+            if wavelength != current_wavelength:
+                self._load_wavelength_lut(wavelength)
+                current_wavelength = wavelength
+            pattern = float_to_8_bit(pattern)
+            transients = self._compute_transients(pattern)
+            self._transient_patterns.append(transients)
+
+    @requires_slm
+    def _compute_transients(self, pattern):
+        byte_count = self._ffi.new("unsigned int*", 0)
+        self._blink_sdk.Calculate_transient_frames(
+            self._slm_handle, self._ffi.from_buffer(pattern), byte_count
+        )
+        transients = self._ffi.new("unsigned char[]", byte_count[0])
+        self._blink_sdk.Retrieve_transient_frames(self._slm_handle, transients)
+        return transients
+
+    @requires_slm
+    def _start_sequence(self):
+        """Sequence wil restart if already running"""
+        logging.debug("Starting sequence of patterns")
+        if self._pattern_running:
+            logging.debug("Sequence already running. Restarting it.")
+            self._stop_sequence()
+            self._pattern_running = True
+        if self._wait_for_trigger:
+            self._hw_pattern_running_thread.start()
+        else:
+            self._sw_pattern_running_thread.start()
+
+    def _hw_run_pattern(self):
+        while self._pattern_running:
+            if self._transient_patterns:
+                for i, transients in enumerate(self._transient_patterns):
+                    if self._pattern_running:
+                        self._pattern_idx = i
+                        _r = self._blink_sdk.Write_transient_frames(
+                            self._slm_handle,
+                            self._board,
+                            transients,
+                            self._wait_for_trigger,
+                            self._output_pulse_image_flip,
+                            self._trigger_timeout_ms,
+                        )
+                        logging.debug(f"applied pattern index: {self._pattern_idx}")
+                        if int(_r):
+                            logging.error(self._get_last_error())
+                            self._pattern_running = False
+                            return
+                    else:
+                        return
+
+    def _sw_run_pattern(self):
+        raise NotImplemented()
+
+    @requires_slm
+    def _stop_sequence(self):
+        self._pattern_running = False
+        if self._wait_for_trigger:
+            self._blink_sdk.Stop_sequence(self._slm_handle)
+            self._hw_pattern_running_thread.join()
+        else:
+            self._sw_pattern_running_thread.join()
+        logging.debug("sequence stopped")
 
 
 class SLM_1024(MeadowlarkSLM):
@@ -604,7 +641,7 @@ class SLM_1024(MeadowlarkSLM):
                                           self._shape[0] * self._shape[1])
         self._flip_immediate = self._ffi.cast("int", 0)
 
-    def _write_image(self, image):
+    def _write_pattern(self, image):
         _r = self._blink_sdk.Write_image(
             self._slm_handle,
             self._board,
@@ -619,318 +656,318 @@ class SLM_1024(MeadowlarkSLM):
             raise Exception(self._get_last_error())
 
 
-class OldInterface():
-    """
-    Functions to implement:
-    In experiment:
-        slmdev.connection.get_sim_diffraction_angle
-    In Device BoulderSLM:
-        self.connection.get_sim_diffraction_angle()
-        self.connection.set_sim_diffraction_angle(newTheta)
-        self.connection.get_is_enabled()
-        self.connection.get_sim_sequence()
-        self.connection.run()
-        self.connection.stop()
-        self.connection.get_sequence_index()
-        self.asproxy.set_sim_sequence(sequence)
-    """
-    def __init__(self, use_odp=False):
-        # Logging
-        loggerName = '.'.join([__name__, self.__class__.__name__])
-        self.logger = logging.getLogger(loggerName)
-        ## SLM geometry
-        # Physical pitch in microns
-        self.pixel_pitch = 15.0
-        # SLM size in pixels
-        self.pixels = (512, 512)
-        # Might as well evaluate image indices only once
-        x_range = np.arange(self.pixels[0])
-        y_range = np.arange(self.pixels[1])
-        self.kk, self.ll = np.meshgrid(x_range, y_range)
-        ## Image sequence
-        self.sequence = []
-        self.sequence_parameters = []
-        ## SIM parameters
-        self.use_ODP = use_odp
-        self.sim_phase_offset = 0
-        self.sim_angle_offset = TWO_PI / 5.
-        self.sim_num_phases = 5
-        self.sim_num_angles = 3
-        self.sim_diffraction_angle = 0.46  # degrees was 0.5 then .25
-        ## Look-up tables and calibration data
-        # Paths
-        self._LUTFolder = "LUT_files"
-        self._calibrationFolder = "Phase_Calibration_Files"
-        # Mapped by wavelength
-        self.luts = {}
-        self.calibs = {}
-        ## Connect to the hardware.
-        self.hardware = BNSDevice()
-        ## Initialize the hardware.
-        self.hardware.initialize()
-
-    def get_sequence(self):
-        return self.sequence
-
-    def get_sim_sequence(self):
-        return self.sequence_parameters
-
-    def set_sim_sequence(self, angle_phase_wavelength):
-        """ Generate a SIM sequence from a list of parameters.
-
-        angle_phase_wavelength is a list where each element is a tuple of the
-        form (angle_number, phase_number, wavelength).
-        """
-        logging.info(f'calling set_sim_sequence with: {angle_phase_wavelength}')
-        num_phases = 0
-        num_angles = 0
-        wavelengths = []
-        for (angle, phase, wavelength) in angle_phase_wavelength:
-            num_phases = max(num_phases, phase + 1)
-            num_angles = max(num_angles, angle + 1)
-            wavelengths.append(wavelength)
-
-        phases = [self.sim_phase_offset + n * TWO_PI / num_phases
-                  for n in range(num_phases)]
-        angles = [self.sim_angle_offset + n * TWO_PI / num_angles
-                  for n in range(num_angles)]
-
-        ## Calculate line pitches for each wavelength, once.
-        # d  = m * wavelength / np.sin theta
-        # 1/1000 since wavelength in nm, pixel pitch in microns.
-        pitches = {w: w / (1000. * np.sin(self.sim_diffraction_angle * TWO_PI / 360.))
-                   for w in set(wavelengths)}
-
-        patterns = []
-        for (angle, phase, wavelength) in angle_phase_wavelength:
-            # retardation for equal powers in 0 and combined +/-1 orders
-            modulation = 65535 * self.get_modulation_factor(wavelength) / 360.0
-            pp = pitches[wavelength] / self.pixel_pitch
-            th = angles[angle]
-            ph = phases[phase]
-            # Create a stripe 16-bit pattern
-            pattern = numpy.ushort(
-                np.rint(
-                    (0.5 * modulation) + (0.5 * modulation) * np.cos(
-                        ph + TWO_PI * (np.cos(th) * self.kk + np.sin(th) * self.ll)
-                        / pp)
-                    ))
-            patterns.append(pattern)
-        self.set_sequence(wavelengths, patterns)
-
-        self.sequence_parameters = angle_phase_wavelength
-
-    def dump_sequence(self):
-        from matplotlib import pyplot as plt
-        for n, im in enumerate(self.sequence):
-            fn = ''.join(['-', str(n), '.jpeg'])
-            implot = plt.imshow(im)
-            implot.set_cmap('gray')
-            plt.savefig(fn)
-        return np.amin(self.sequence), np.amax(self.sequence)
-
-    def get_lut(self, wavelength):
-        """ Returns the LUT closest to wavelength. """
-        lut_wavelengths = self.luts.keys()
-        nearest = min(lut_wavelengths, key=lambda x: abs(x - wavelength))
-        return self.luts[nearest]
-
-    def load_sequence(self):
-        """ Loads images to the device. """
-        if not self.sequence:
-            raise MicroscopeError(
-                'No data to load to SLM --- generate sequence then load.')
-        else:
-            self.hardware.load_sequence(self.sequence)
-        return None
-
-    def set_test_sequence(self, wavelength=488):
-        """ Generate a series of test images. """
-        from PIL import Image, ImageDraw, ImageFont
-        sequence = []
-        labels = range(15)
-        imsize = self.pixels
-        font = ImageFont.truetype('arial.ttf', imsize[0]//2)
-        for c in labels:
-            image = Image.new('L', imsize)
-            draw = ImageDraw.Draw(image)
-            draw.setink(255)
-            draw.text((128, 0), str(c), font=font)
-            pattern16 = numpy.array(image.getdata(),
-                                    dtype=numpy.ushort).reshape(imsize)
-            pattern16 *= (65535 * 123.9 / 360) / pattern16.max()
-            # pattern = lut[pattern16 / 4]
-            pattern = pattern16
-            # Append to the sequence.
-            if self.use_ODP:
-                sequence.append((pattern, wavelength))
-            else:
-                sequence.append(pattern)
-        self.sequence_parameters = map(lambda x: (x, 0, 0), labels)
-        self.sequence = sequence
-        self.load_sequence()
-
-    def get_shape(self):
-        """ Return the device shape in pixels. """
-        return self.pixels
-
-    def set_sequence(self, wavelengths, patterns):
-        """ Generate sequence from given wavelengths and patterns.
-
-        Accepts:
-          single wavelength, N patterns;
-          N wavelengths, N patterns
-
-        Patterns should be arrays of 16-bit unsigned integers; they will be
-        reshaped and rescaled to the device size and bit depth.
-        SLM shape can be queried with get_shape().
-        """
-        if type(wavelengths) in [list, tuple]:
-            assert len(wavelengths) == len(patterns), \
-                "len(wavelengths) != len(patterns)."
-        else:
-            wavelengths = len(patterns) * [wavelengths]
-        # Generate the sequence.
-        self.sequence = []
-        for p, w in zip(patterns, wavelengths):
-            # # Cast and reshape provided pattern.
-            # pattern = numpy.array(p, dtype=numpy.ushort).reshape(self.pixels)
-            self.sequence.append((p, w))
-        self.load_sequence()
-
-    def run(self):
-        """ Power on and make device respond to triggers. """
-        self.hardware.power = True
-        self.hardware.start_sequence()
-        return None
-
-    def stop(self):
-        """ Power off and stop device responding to triggers. """
-        self.hardware.stop_sequence()
-        self.hardware.power = 0
-        return None
-
-    def get_temperature(self):
-        return self.hardware.temperature
-
-    def get_is_enabled(self):
-        return int(self.hardware.power)
-
-    def get_power(self):
-        return int(self.hardware.power)
-
-    def get_sequence_index(self):
-        index = self.hardware.curr_seq_image
-        # Index is actually that of the image that will be displayed
-        # on the next trigger.
-        return index - 1 if index > 0 else len(self.sequence) - 1
-
-    def get_sim_diffraction_angle(self):
-        return self.sim_diffraction_angle
-
-    def set_sim_diffraction_angle(self, angle):
-        self.sim_diffraction_angle = float(angle)
-
-    def get_modulation_factor(self, wavelength):
-        if self.use_ODP:
-            return ODP_MODULATION_FACTORS[wavelength]
-        else:
-            return MODULATION_FACTORS[wavelength]
-
-    def set_modulation_factor(self, factor, wavelength):
-        if 0 >= factor >= 360:
-            raise ValueError('The modulation factor must have a value between 0 and 360')
-        if self.use_ODP:
-            ODP_MODULATION_FACTORS[wavelength] = factor
-        else:
-            MODULATION_FACTORS[wavelength] = factor
-
-    def single_frame(self, index):
-        self.hardware.stop_sequence()
-        self.hardware.write_image(image=self.sequence[index][0], wavelength=self.sequence[index][1])
-
-    def run_modulation_calibration_seq(self, wavelength, mod_start=80, mod_stop=220, step=10):
-        current_mod_factor = self.get_modulation_factor(wavelength)
-        for test_mod_factor in range(mod_start, mod_stop, step):
-            seq = [(0, 0, wavelength), (0, 0, wavelength)]
-            self.set_modulation_factor(test_mod_factor, wavelength)
-            self.set_sim_sequence(seq)
-            self.run()
-            if input(f'Current modulation factor is: {test_mod_factor}. '
-                     f'Trigger a few times the SLM to start to measure or type any key and enter to stop sequence'):
-                self.stop()
-                break
-            self.stop()
-        self.set_modulation_factor(current_mod_factor, wavelength)
-
-    def run_calibration(self,
-                        camera,
-                        camera_roi=(512, 512, 1024, 1024),
-                        exp_time=0.01,
-                        pattern="stripes",
-                        bit_depth=8,
-                        step_size=1,
-                        pattern_size=4,
-                        scale="upper",
-                        use_odp=False,
-                        apply_linear=True,
-                        wavelength=None):
-
-        image_buffer = Queue()
-        camera.set_exposure_time(exp_time)
-        camera.set_trigger(TriggerType.SOFTWARE, TriggerMode.ONCE)
-        camera.set_roi(camera_roi)
-        camera.enable()
-
-        # For the moment do the tests in non ODP mode
-        self.hardware.use_odp = use_odp
-
-        # Load a linear LUT
-        if apply_linear:
-            self.hardware._load_linear_lut()
-        else:
-            self.hardware.load_wavelength_lut(wavelength)
-
-        scale_max = np.iinfo(np.dtype(f"uint{bit_depth}")).max
-        scale_min = np.iinfo(np.dtype(f"uint{bit_depth}")).min
-
-        if pattern == "stripes":
-            pattern_generator = stripe_pattern
-        elif pattern == "checkerboard":
-            pattern_generator = checkerboard_pattern
-        else:
-            raise MicroscopeError("unknown calibration pattern")
-
-        for p in range(scale_min, scale_max, step_size):
-            if scale == "upper":
-                min_val = p * step_size
-                pattern_image = pattern_generator(min_val, scale_max,
-                                                  stripes_width=pattern_size,
-                                                  bit_depth=bit_depth,
-                                                  pattern_shape=self.pixels)
-            if scale == "lower":
-                max_val = scale_max - (p * step_size)
-                pattern_image = pattern_generator(scale_min, max_val,
-                                                  stripes_width=pattern_size,
-                                                  bit_depth=bit_depth,
-                                                  pattern_shape=self.pixels)
-            if scale == "mid":
-                max_val = scale_max - (p * step_size)//2
-                min_val = (p * step_size)//2
-                pattern_image = pattern_generator(min_val, max_val,
-                                                  stripes_width=pattern_size,
-                                                  bit_depth=bit_depth,
-                                                  pattern_shape=self.pixels)
-
-            self.hardware.write_image(pattern_image)
-            print(f"Acquiring phase {p} out of {scale_max}")
-            time.sleep(.2)
-            image_buffer.put(camera.trigger_and_wait()[0])
-            # time.sleep(exp_time + .2)
-
-        with TiffWriter(f'cal_{time.time()}_ODP-{use_odp}_linearLUT-{apply_linear}_wavelength-{wavelength}.ome-tif') as tif:
-            while not image_buffer.empty():
-                tif.write(image_buffer.get(),
-                          metadata={'axes': 'YX'})
-
-        print("Calibration done.")
+# class OldInterface():
+#     """
+#     Functions to implement:
+#     In experiment:
+#         slmdev.connection.get_sim_diffraction_angle
+#     In Device BoulderSLM:
+#         self.connection.get_sim_diffraction_angle()
+#         self.connection.set_sim_diffraction_angle(newTheta)
+#         self.connection.get_is_enabled()
+#         self.connection.get_sim_sequence()
+#         self.connection.run()
+#         self.connection.stop()
+#         self.connection.get_sequence_index()
+#         self.asproxy.set_sim_sequence(sequence)
+#     """
+#     def __init__(self, use_odp=False):
+#         # Logging
+#         loggerName = '.'.join([__name__, self.__class__.__name__])
+#         self.logger = logging.getLogger(loggerName)
+#         ## SLM geometry
+#         # Physical pitch in microns
+#         self.pixel_pitch = 15.0
+#         # SLM size in pixels
+#         self.pixels = (512, 512)
+#         # Might as well evaluate image indices only once
+#         x_range = np.arange(self.pixels[0])
+#         y_range = np.arange(self.pixels[1])
+#         self.kk, self.ll = np.meshgrid(x_range, y_range)
+#         ## Image sequence
+#         self.sequence = []
+#         self.sequence_parameters = []
+#         ## SIM parameters
+#         self.use_ODP = use_odp
+#         self.sim_phase_offset = 0
+#         self.sim_angle_offset = TWO_PI / 5.
+#         self.sim_num_phases = 5
+#         self.sim_num_angles = 3
+#         self.sim_diffraction_angle = 0.46  # degrees was 0.5 then .25
+#         ## Look-up tables and calibration data
+#         # Paths
+#         self._LUTFolder = "LUT_files"
+#         self._calibrationFolder = "Phase_Calibration_Files"
+#         # Mapped by wavelength
+#         self.luts = {}
+#         self.calibs = {}
+#         ## Connect to the hardware.
+#         self.hardware = BNSDevice()
+#         ## Initialize the hardware.
+#         self.hardware.initialize()
+#
+#     def get_sequence(self):
+#         return self.sequence
+#
+#     def get_sim_sequence(self):
+#         return self.sequence_parameters
+#
+#     def set_sim_sequence(self, angle_phase_wavelength):
+#         """ Generate a SIM sequence from a list of parameters.
+#
+#         angle_phase_wavelength is a list where each element is a tuple of the
+#         form (angle_number, phase_number, wavelength).
+#         """
+#         logging.info(f'calling set_sim_sequence with: {angle_phase_wavelength}')
+#         num_phases = 0
+#         num_angles = 0
+#         wavelengths = []
+#         for (angle, phase, wavelength) in angle_phase_wavelength:
+#             num_phases = max(num_phases, phase + 1)
+#             num_angles = max(num_angles, angle + 1)
+#             wavelengths.append(wavelength)
+#
+#         phases = [self.sim_phase_offset + n * TWO_PI / num_phases
+#                   for n in range(num_phases)]
+#         angles = [self.sim_angle_offset + n * TWO_PI / num_angles
+#                   for n in range(num_angles)]
+#
+#         ## Calculate line pitches for each wavelength, once.
+#         # d  = m * wavelength / np.sin theta
+#         # 1/1000 since wavelength in nm, pixel pitch in microns.
+#         pitches = {w: w / (1000. * np.sin(self.sim_diffraction_angle * TWO_PI / 360.))
+#                    for w in set(wavelengths)}
+#
+#         patterns = []
+#         for (angle, phase, wavelength) in angle_phase_wavelength:
+#             # retardation for equal powers in 0 and combined +/-1 orders
+#             modulation = 65535 * self.get_modulation_factor(wavelength) / 360.0
+#             pp = pitches[wavelength] / self.pixel_pitch
+#             th = angles[angle]
+#             ph = phases[phase]
+#             # Create a stripe 16-bit pattern
+#             pattern = numpy.ushort(
+#                 np.rint(
+#                     (0.5 * modulation) + (0.5 * modulation) * np.cos(
+#                         ph + TWO_PI * (np.cos(th) * self.kk + np.sin(th) * self.ll)
+#                         / pp)
+#                     ))
+#             patterns.append(pattern)
+#         self.set_sequence(wavelengths, patterns)
+#
+#         self.sequence_parameters = angle_phase_wavelength
+#
+#     def dump_sequence(self):
+#         from matplotlib import pyplot as plt
+#         for n, im in enumerate(self.sequence):
+#             fn = ''.join(['-', str(n), '.jpeg'])
+#             implot = plt.imshow(im)
+#             implot.set_cmap('gray')
+#             plt.savefig(fn)
+#         return np.amin(self.sequence), np.amax(self.sequence)
+#
+#     def get_lut(self, wavelength):
+#         """ Returns the LUT closest to wavelength. """
+#         lut_wavelengths = self.luts.keys()
+#         nearest = min(lut_wavelengths, key=lambda x: abs(x - wavelength))
+#         return self.luts[nearest]
+#
+#     def load_sequence(self):
+#         """ Loads images to the device. """
+#         if not self.sequence:
+#             raise MicroscopeError(
+#                 'No data to load to SLM --- generate sequence then load.')
+#         else:
+#             self.hardware.load_sequence(self.sequence)
+#         return None
+#
+#     def set_test_sequence(self, wavelength=488):
+#         """ Generate a series of test images. """
+#         from PIL import Image, ImageDraw, ImageFont
+#         sequence = []
+#         labels = range(15)
+#         imsize = self.pixels
+#         font = ImageFont.truetype('arial.ttf', imsize[0]//2)
+#         for c in labels:
+#             image = Image.new('L', imsize)
+#             draw = ImageDraw.Draw(image)
+#             draw.setink(255)
+#             draw.text((128, 0), str(c), font=font)
+#             pattern16 = numpy.array(image.getdata(),
+#                                     dtype=numpy.ushort).reshape(imsize)
+#             pattern16 *= (65535 * 123.9 / 360) / pattern16.max()
+#             # pattern = lut[pattern16 / 4]
+#             pattern = pattern16
+#             # Append to the sequence.
+#             if self.use_ODP:
+#                 sequence.append((pattern, wavelength))
+#             else:
+#                 sequence.append(pattern)
+#         self.sequence_parameters = map(lambda x: (x, 0, 0), labels)
+#         self.sequence = sequence
+#         self.load_sequence()
+#
+#     def get_shape(self):
+#         """ Return the device shape in pixels. """
+#         return self.pixels
+#
+#     def set_sequence(self, wavelengths, patterns):
+#         """ Generate sequence from given wavelengths and patterns.
+#
+#         Accepts:
+#           single wavelength, N patterns;
+#           N wavelengths, N patterns
+#
+#         Patterns should be arrays of 16-bit unsigned integers; they will be
+#         reshaped and rescaled to the device size and bit depth.
+#         SLM shape can be queried with get_shape().
+#         """
+#         if type(wavelengths) in [list, tuple]:
+#             assert len(wavelengths) == len(patterns), \
+#                 "len(wavelengths) != len(patterns)."
+#         else:
+#             wavelengths = len(patterns) * [wavelengths]
+#         # Generate the sequence.
+#         self.sequence = []
+#         for p, w in zip(patterns, wavelengths):
+#             # # Cast and reshape provided pattern.
+#             # pattern = numpy.array(p, dtype=numpy.ushort).reshape(self.pixels)
+#             self.sequence.append((p, w))
+#         self.load_sequence()
+#
+#     def run(self):
+#         """ Power on and make device respond to triggers. """
+#         self.hardware.power = True
+#         self.hardware._start_sequence()
+#         return None
+#
+#     def stop(self):
+#         """ Power off and stop device responding to triggers. """
+#         self.hardware._stop_sequence()
+#         self.hardware.power = 0
+#         return None
+#
+#     def get_temperature(self):
+#         return self.hardware.temperature
+#
+#     def get_is_enabled(self):
+#         return int(self.hardware.power)
+#
+#     def get_power(self):
+#         return int(self.hardware.power)
+#
+#     def get_sequence_index(self):
+#         index = self.hardware.curr_seq_image
+#         # Index is actually that of the image that will be displayed
+#         # on the next trigger.
+#         return index - 1 if index > 0 else len(self.sequence) - 1
+#
+#     def get_sim_diffraction_angle(self):
+#         return self.sim_diffraction_angle
+#
+#     def set_sim_diffraction_angle(self, angle):
+#         self.sim_diffraction_angle = float(angle)
+#
+#     def get_modulation_factor(self, wavelength):
+#         if self.use_ODP:
+#             return ODP_MODULATION_FACTORS[wavelength]
+#         else:
+#             return MODULATION_FACTORS[wavelength]
+#
+#     def set_modulation_factor(self, factor, wavelength):
+#         if 0 >= factor >= 360:
+#             raise ValueError('The modulation factor must have a value between 0 and 360')
+#         if self.use_ODP:
+#             ODP_MODULATION_FACTORS[wavelength] = factor
+#         else:
+#             MODULATION_FACTORS[wavelength] = factor
+#
+#     def single_frame(self, index):
+#         self.hardware._stop_sequence()
+#         self.hardware.write_image(image=self.sequence[index][0], wavelength=self.sequence[index][1])
+#
+#     def run_modulation_calibration_seq(self, wavelength, mod_start=80, mod_stop=220, step=10):
+#         current_mod_factor = self.get_modulation_factor(wavelength)
+#         for test_mod_factor in range(mod_start, mod_stop, step):
+#             seq = [(0, 0, wavelength), (0, 0, wavelength)]
+#             self.set_modulation_factor(test_mod_factor, wavelength)
+#             self.set_sim_sequence(seq)
+#             self.run()
+#             if input(f'Current modulation factor is: {test_mod_factor}. '
+#                      f'Trigger a few times the SLM to start to measure or type any key and enter to stop sequence'):
+#                 self.stop()
+#                 break
+#             self.stop()
+#         self.set_modulation_factor(current_mod_factor, wavelength)
+#
+#     def run_calibration(self,
+#                         camera,
+#                         camera_roi=(512, 512, 1024, 1024),
+#                         exp_time=0.01,
+#                         pattern="stripes",
+#                         bit_depth=8,
+#                         step_size=1,
+#                         pattern_size=4,
+#                         scale="upper",
+#                         use_odp=False,
+#                         apply_linear=True,
+#                         wavelength=None):
+#
+#         image_buffer = Queue()
+#         camera.set_exposure_time(exp_time)
+#         camera.set_trigger(TriggerType.SOFTWARE, TriggerMode.ONCE)
+#         camera.set_roi(camera_roi)
+#         camera.enable()
+#
+#         # For the moment do the tests in non ODP mode
+#         self.hardware.use_odp = use_odp
+#
+#         # Load a linear LUT
+#         if apply_linear:
+#             self.hardware._load_linear_lut()
+#         else:
+#             self.hardware._load_wavelength_lut(wavelength)
+#
+#         scale_max = np.iinfo(np.dtype(f"uint{bit_depth}")).max
+#         scale_min = np.iinfo(np.dtype(f"uint{bit_depth}")).min
+#
+#         if pattern == "stripes":
+#             pattern_generator = stripe_pattern
+#         elif pattern == "checkerboard":
+#             pattern_generator = checkerboard_pattern
+#         else:
+#             raise MicroscopeError("unknown calibration pattern")
+#
+#         for p in range(scale_min, scale_max, step_size):
+#             if scale == "upper":
+#                 min_val = p * step_size
+#                 pattern_image = pattern_generator(min_val, scale_max,
+#                                                   stripes_width=pattern_size,
+#                                                   bit_depth=bit_depth,
+#                                                   pattern_shape=self.pixels)
+#             if scale == "lower":
+#                 max_val = scale_max - (p * step_size)
+#                 pattern_image = pattern_generator(scale_min, max_val,
+#                                                   stripes_width=pattern_size,
+#                                                   bit_depth=bit_depth,
+#                                                   pattern_shape=self.pixels)
+#             if scale == "mid":
+#                 max_val = scale_max - (p * step_size)//2
+#                 min_val = (p * step_size)//2
+#                 pattern_image = pattern_generator(min_val, max_val,
+#                                                   stripes_width=pattern_size,
+#                                                   bit_depth=bit_depth,
+#                                                   pattern_shape=self.pixels)
+#
+#             self.hardware.write_image(pattern_image)
+#             print(f"Acquiring phase {p} out of {scale_max}")
+#             time.sleep(.2)
+#             image_buffer.put(camera.trigger_and_wait()[0])
+#             # time.sleep(exp_time + .2)
+#
+#         with TiffWriter(f'cal_{time.time()}_ODP-{use_odp}_linearLUT-{apply_linear}_wavelength-{wavelength}.ome-tif') as tif:
+#             while not image_buffer.empty():
+#                 tif.write(image_buffer.get(),
+#                           metadata={'axes': 'YX'})
+#
+#         print("Calibration done.")
