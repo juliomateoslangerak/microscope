@@ -1283,7 +1283,12 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         self._patterns = patterns
         self._wavelengths = wavelengths
         self._pattern_idx = -1  # none is applied yet
+        self._queue_patterns()
         # TODO: What is the function to run the patterns in the queue? enable?
+
+    def _queue_patterns(self) -> None:
+        """Implement the device specific queuing of patterns."""
+        raise NotImplementedError()
 
     def _do_trigger(self) -> None:
         """Convenience fallback.
