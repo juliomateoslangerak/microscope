@@ -1222,16 +1222,11 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             )
 
         if patterns.ndim == 3:
-            if not isinstance(wavelengths, list) or len(wavelengths) != patterns.shape[0]:
+            if len(wavelengths) != patterns.shape[0]:
                 raise ValueError(
                     "The length of the wavelengths list %d does not match the number of patterns to load %d"
                     % (len(wavelengths), patterns.shape[0],)
                 )
-        elif not isinstance(wavelengths, int):
-            raise ValueError(
-                "The wavelength should be an integer when loading a single pattern"
-            )
-
         if (patterns.shape[-2], patterns.shape[-1]) != self.get_shape():
             raise ValueError(
                 "PATTERNS shape %s does not match the SLM's shape %s"
@@ -1264,7 +1259,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             raise microscope.IncompatibleStateError(
                 "apply_pattern requires software trigger type"
             )
-        self._validate_patterns(pattern, [wavelength])
+        self._validate_patterns(pattern, wavelength)
         self._do_apply_pattern(pattern, wavelength)
 
     def queue_patterns(self, patterns: np.ndarray, wavelengths: Union[List[int], int]) -> None:
@@ -1279,6 +1274,8 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         A convenience fallback is provided for software triggering is provided.
 
         """
+        if isinstance(wavelengths, int):
+            wavelengths = [wavelengths] * patterns.shape[0]
         self._validate_patterns(patterns, wavelengths)
         self._patterns = patterns
         self._wavelengths = wavelengths

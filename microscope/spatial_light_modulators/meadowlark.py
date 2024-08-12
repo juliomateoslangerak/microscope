@@ -553,10 +553,6 @@ class SLM_512(MeadowlarkSLM):
         self._transient_patterns = []
         current_wavelength = None
 
-        # If only a single wavelength is provided, use it for all patterns
-        if isinstance(self._wavelengths, int):
-            self._wavelengths = [self._wavelengths] * len(self._patterns)
-
         for pattern, wavelength in zip(self._patterns, self._wavelengths):
             if wavelength != current_wavelength:
                 self._load_wavelength_lut(wavelength)
