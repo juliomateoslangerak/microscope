@@ -306,6 +306,91 @@ class DeformableMirrorWidget(QtWidgets.QWidget):
             actuator.blockSignals(False)
 
 
+class SpatialLightModulatorWidget(QtWidgets.QWidget):
+    """Display a widget to set the SLM pattern."""
+    def __init__(self, device: microscope.abc.SpatialLightModulator, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._device = device
+
+        self._view = QtWidgets.QLabel(parent=self)
+        self._pattern = np.zeros(self._device.get_shape(), dtype=np.uint8)
+        self._wavelength = 488
+        self._apply_pattern()
+
+        self._enable_check = QtWidgets.QCheckBox("Enabled", parent=self)
+        self._enable_check.stateChanged.connect(self.update_enable_state)
+
+        self._wavelength_box = QtWidgets.QSpinBox(parent=self)
+        self._wavelength_box.setSuffix(" nm")
+        self._wavelength_box.setSingleStep(1)
+        self._wavelength_box.valueChanged.connect(self._set_wavelength)
+
+        self._pattern_menu = QtWidgets.QMenu(parent=self)
+        self._pattern_menu.addAction("Clear", self._clearPattern).triggered.connect(self._clearPattern)
+        self._pattern_menu.addAction("Random", self._randomPattern).triggered.connect(self._randomPattern)
+        self._pattern_menu.addAction("Lines", self._linesPattern).triggered.connect(self._linesPattern)
+
+        self._pattern_button = QtWidgets.QPushButton("Pattern Options", parent=self)
+        self._pattern_button.setMenu(self._pattern_menu)
+
+        self._apply_button = QtWidgets.QPushButton("Apply", parent=self)
+        self._apply_button.clicked.connect(self._apply_pattern)
+
+        self.update_enable_state()
+
+        layout = QtWidgets.QVBoxLayout()
+        controls_row = QtWidgets.QHBoxLayout()
+        for widget in [
+            self._enable_check,
+            self._wavelength_box,
+            self._pattern_button,
+            self._apply_button,
+        ]:
+            controls_row.addWidget(widget)
+        layout.addLayout(controls_row)
+        layout.addWidget(self._view)
+        self.setLayout(layout)
+
+    def update_enable_state(self) -> None:
+        """Update UI and camera state after enable check box"""
+        if self._enable_check.isChecked():
+            self._device.enable()
+        else:
+            self._device.disable()
+
+        if self._enable_check.isChecked() != self._device.get_is_enabled():
+            self._enable_check.setChecked(self._device.get_is_enabled())
+            _logger.error(
+                "failed to %s SLM",
+                "enable" if self._enable_check.isChecked() else "disable",
+            )
+
+        self._apply_button.setEnabled(self._device.get_is_enabled())
+        self._pattern_menu.setEnabled(self._device.get_is_enabled())
+
+    def _set_wavelength(self, wavelength: int) -> None:
+        self._wavelength = wavelength
+
+    def _apply_pattern(self) -> None:
+        qt_img = QtGui.QImage(
+            self._pattern.tobytes(), *self._pattern.shape, QtGui.QImage.Format_Grayscale8
+        )
+        self._view.setPixmap(QtGui.QPixmap.fromImage(qt_img))
+        self._device.apply_pattern(self._pattern, self._wavelength)
+
+    def _clearPattern(self) -> None:
+        print("clear")
+        self._pattern.fill(0)
+
+    def _randomPattern(self) -> None:
+        print("random")
+        self._pattern = np.random.randint(0, 256, self._pattern.shape, dtype=np.uint8)
+
+    def _linesPattern(self) -> None:
+        for i in range(self._pattern.shape[0]):
+            self._pattern[i, :] = 255 * (i % 2)
+
+
 class FilterWheelWidget(QtWidgets.QWidget):
     """Group of toggle push buttons to change filter position.
 
@@ -492,6 +577,7 @@ def main(argv: Sequence[str]) -> int:
         "Camera": CameraWidget,
         "Controller": ControllerWidget,
         "DeformableMirror": DeformableMirrorWidget,
+        "SpatialLightModulator": SpatialLightModulatorWidget,
         "DeviceSettings": DeviceSettingsWidget,
         "FilterWheel": FilterWheelWidget,
         "LightSourceWidget": LightSourceWidget,
