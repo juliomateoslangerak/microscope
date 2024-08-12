@@ -410,6 +410,27 @@ class SimulatedDeformableMirror(
         return self._current_pattern
 
 
+class SimulatedSpatialLightModulator(
+    microscope._utils.OnlyTriggersOnceOnSoftwareMixin,
+    microscope.abc.SpatialLightModulator,
+):
+    def __init__(self, shape: Tuple[int, int] = (512, 512), **kwargs):
+        super().__init__(**kwargs)
+        self._shape = shape
+
+    def _get_shape(self) -> Tuple[int, int]:
+        return self._shape
+
+    def _do_apply_pattern(self, pattern, wavelength):
+        pass
+
+    def _queue_patterns(self) -> None:
+        pass
+
+    def _do_shutdown(self) -> None:
+        pass
+
+
 class SimulatedStageAxis(microscope.abc.StageAxis):
     def __init__(self, limits: microscope.AxisLimits) -> None:
         super().__init__()
