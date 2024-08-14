@@ -66,6 +66,7 @@ def requires_slm(func):
 def float_to_8_bit(array):
     """Converts a float array values 0.0 to 1.0 to 8-bit. Values outside that range are clipped"""
     array = np.clip(array, 0.0, 1.0)
+    # TODO: apply some logic to use the most efficient portion of the range in the SLM
     return np.round(array * 255).astype("uint8")
 
 def transform_16_to_8_bit(array, fitting=None):
@@ -103,7 +104,7 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
     :param header_definitions_path: Absolute path to the header definitions from the SDK.
     :param blink_sdk_dll_path: name of, or absolute path to, the SID4_SDK.dll file
     :param luts_path: Absolute path to the LUT files.
-    :param default_lut_file:
+    :param default_wavelength:
     :param phase_calibration_files_path:
     :param bit_depth:
     :param slm_resolution:
@@ -121,7 +122,7 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
         bit_depth: int,
         luts: dict,
         phase_calibration_files_path: str,
-        default_lut_file: str = None,
+        default_wavelength: str = None,
         default_static_lut_file: str = None,
         is_nematic_type: bool = True,
         ram_write_enable: bool = True,
@@ -182,11 +183,12 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
 
         # LUTs
         self._luts = {k: v.encode() for k, v in luts.items()}
-        if default_lut_file is None:
+        if default_wavelength is None:
             self._default_lut_file = list(self._luts.values())[0]
         else:
-            self._default_lut_file = default_lut_file.encode()
+            self._default_lut_file = self._luts[default_wavelength]
         self._default_static_lut_file = default_static_lut_file.encode()
+        # TODO: apply some logic to get a real path, without escaping characters
         self._phase_calibration_files_path = phase_calibration_files_path.encode()
 
         if self._default_static_lut_file is None:
