@@ -1206,7 +1206,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         """Return a tuple of `(width, height)` corresponding to the shape of the SLM"""
         return self._get_shape()
 
-    def _validate_patterns(self, patterns: np.ndarray, wavelengths: Union[list[int], int]) -> None:
+    def _validate_patterns(self, patterns: np.ndarray, wavelengths: Union[List[int], int]) -> None:
         """Validate the shape of a series of patterns.
 
         Only validates the shape of the patterns, not if the values
