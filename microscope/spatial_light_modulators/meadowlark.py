@@ -204,7 +204,7 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
             
         # Trigger parameters
 
-        self.initialize()
+        self._initialize()
 
         # Verify construction of resources
         if int(self._blink_sdk.Is_slm_transient_constructed(self._slm_handle)):
@@ -266,7 +266,7 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
             readonly=lambda: False,
         )
 
-    def initialize(self):
+    def _initialize(self):
         # Need to unload and reload the DLL here.
         # Otherwise, the DLL can open an error window about having already
         # initialized another DLL, which we won't see on a remote machine.
