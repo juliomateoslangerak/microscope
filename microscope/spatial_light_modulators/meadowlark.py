@@ -63,11 +63,13 @@ def requires_slm(func):
 
     return wrapper
 
+
 def float_to_8_bit(array):
     """Converts a float array values 0.0 to 1.0 to 8-bit. Values outside that range are clipped"""
     array = np.clip(array, 0.0, 1.0)
     # TODO: apply some logic to use the most efficient portion of the range in the SLM
     return np.round(array * 255).astype("uint8")
+
 
 def transform_16_to_8_bit(array, fitting=None):
     if array.dtype == "uint16":
@@ -232,7 +234,7 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
         self.add_setting(
             name="trigger_timeout_ms",
             dtype="int",
-            get_func=lambda: self._trigger_timeout_ms,
+            get_func=lambda: int(self._trigger_timeout_ms),
             set_func=self._set_trigger_timeout_ms,
             values=lambda: (0, 2**16),
             readonly=lambda: False,
@@ -241,18 +243,10 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
         self.add_setting(
             name="max_transients",
             dtype="int",
-            get_func=lambda: self._max_transients,
+            get_func=lambda: int(self._max_transients),
             set_func=self._set_max_transients,
             values=lambda: (0, 2**8),
             readonly=lambda: False,
-        )
-
-        self.add_setting(
-            name="SLM_temperature",
-            dtype="float",
-            get_func=self._get_temperature,
-            set_func=None,
-            values=lambda: "This setting is read only. It returns the temperature of the SLM",
         )
 
         self.add_setting(
@@ -264,34 +258,10 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
         )
 
         self.add_setting(
-            name="ramp_delay",
-            dtype="int",
-            get_func=lambda: self._ramp_delay,
-            set_func=self._set_ramp_delay,
-            values=lambda: (1, 32),
-        )
-
-        self.add_setting(
-            name="pre_ramp_slope",
-            dtype="int",
-            get_func=lambda: self._pre_ramp_slope,
-            set_func=self._set_pre_ramp_slope,
-            values=lambda: (1, 32),
-        )
-
-        self.add_setting(
-            name="post_ramp_slope",
-            dtype="int",
-            get_func=lambda: self._post_ramp_slope,
-            set_func=self._set_post_ramp_slope,
-            values=lambda: (1, 32),
-        )
-
-        self.add_setting(
             name="output_pulse_image_flip",
             dtype="bool",
-            get_func=lambda: self._output_pulse_image_flip,
-            set_func=lambda x: setattr(self, "_output_pulse_image_flip", x),
+            get_func=lambda: bool(self._output_pulse_image_flip),
+            set_func=self._set_output_pulse_image_flip,
             values=lambda: "This setting is controlling weather an output trigger is sent after the image is written.",
             readonly=lambda: False,
         )
@@ -356,9 +326,7 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
         return self._shape
 
     def _do_shutdown(self) -> None:
-        _r = self._blink_sdk.Delete_SDK(self._slm_handle)
-        if int(_r):
-            raise DeviceError(self._get_last_error())
+        self._blink_sdk.Delete_SDK(self._slm_handle)
         self._constructed_okay[0] = 0
 
     @requires_slm
@@ -419,7 +387,9 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
         raise NotImplemented()
 
     def _set_trigger_timeout_ms(self, timeout_ms):
-        self._trigger_timeout_ms = timeout_ms
+        self._trigger_timeout_ms = self._ffi.cast(
+            "unsigned int", timeout_ms
+        )
 
     @requires_slm
     def _set_true_frames(self, true_frames):
@@ -433,47 +403,16 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
         )
 
     def _set_max_transients(self, max_transients):
-        self._max_transients = max_transients
+        self._max_transients = self._ffi.cast("int", max_transients)
 
-    def _set_output_pulse_image_flip(self, output_pulse_image_flip):
-        self._output_pulse_image_flip = output_pulse_image_flip
-
-    def _set_ramp_delay(self, ramp_delay):
-        prev = self._ramp_delay
-        self._ramp_delay = ramp_delay
-        _r = self._blink_sdk.SetRampDelay(self._slm_handle, self._board, self._ramp_delay)
-        if int(_r):
-            self._ramp_delay = prev
-            raise Exception(self._get_last_error())
+    def _set_output_pulse_image_flip(self, output_flip):
+        if output_flip:
+            self._output_pulse_image_flip = self._ffi.cast("int", 1)
         else:
-            return None
-
-    def _set_pre_ramp_slope(self, pre_ramp_slope):
-        prev = self._pre_ramp_slope
-        self._pre_ramp_slope = pre_ramp_slope
-        _r = self._blink_sdk.SetPreRampSlope(self._slm_handle, self._board, self._pre_ramp_slope)
-        if int(_r):
-            self._pre_ramp_slope = prev
-            raise Exception(self._get_last_error())
-        else:
-            return None
-
-    def _set_post_ramp_slope(self, post_ramp_slope):
-        prev = self._post_ramp_slope
-        self._post_ramp_slope = post_ramp_slope
-        _r = self._blink_sdk.SetPostRampSlope(self._slm_handle, self._board, self._post_ramp_slope)
-        if int(_r):
-            self._post_ramp_slope = prev
-            raise Exception(self._get_last_error())
-        else:
-            return None
-
-
-    def _get_temperature(self):
-        return float(self._blink_sdk.Read_SLM_temperature(self._slm_handle, self._board))
+            self._output_pulse_image_flip = self._ffi.cast("int", 0)
 
     def _get_version_info(self):
-        return self._ffi.string(self._blink_sdk.Get_version_info(self._slm_handle))
+        return self._ffi.string(self._blink_sdk.Get_version_info(self._slm_handle)).decode()
 
 
 class SLM_512(MeadowlarkSLM):
@@ -484,10 +423,15 @@ class SLM_512(MeadowlarkSLM):
         self._use_odp = use_odp
         self._true_frames = self._ffi.cast("int", 0)
 
-        self._shape = (
-            int(self._blink_sdk.Get_image_width(self._slm_handle, self._board)),
-            int(self._blink_sdk.Get_image_height(self._slm_handle, self._board)),
-        )
+        try:
+            self._shape = (
+                int(self._blink_sdk.Get_image_width(self._slm_handle, self._board)),
+                int(self._blink_sdk.Get_image_height(self._slm_handle, self._board)),
+            )
+        except AttributeError:
+            # Some SDK versions do not have the Get_image_width/height methods
+            # TODO: Verify if modern SDKs have or it is only exclusive to 1024x1024 versions
+            self._shape = (512, 512)
         if self._shape != (512, 512):
             raise InitialiseError("The shape of the SLM is not 512x512. You may"
                                   "have initialized the wrong SLM device or used"
@@ -511,24 +455,29 @@ class SLM_512(MeadowlarkSLM):
         )
 
     def _set_odp(self, use_odp):
+        # We have to change here the true_frames when we enable/disable DOP
         raise NotImplemented()
-    
-    def _do_enable(self):
-        if self._power_state == 1:
-            return True
-        self._power_state = 1
-        _r = self._blink_sdk.SLM_power(self._slm_handle, self._power_state)
-        if int(_r):
-            self._power_state = 0
-            raise DeviceError(self._get_last_error())
 
-        # and if hardware we run from the in a separete thread
+    def _do_enable(self):
+        if bool(self._power_state):
+            print("already enabled")
+            # Already enabled
+            return True
+
+        # and if hardware we run from the in a separate thread
         if self._transient_patterns:
             self._start_sequence()
+        self._power_state = self._ffi.cast("int", 1)
+        self._blink_sdk.SLM_power(self._slm_handle, self._power_state)
+        return True
 
     def _do_disable(self):
-        if self._power_state == 0:
-            return
+        if not bool(self._power_state):
+            return True
+        self._stop_sequence()
+        self._power_state = self._ffi.cast("int", 0)
+        self._blink_sdk.SLM_power(self._slm_handle, self._power_state)
+        return True
 
     def _write_pattern(self, image):
         _r = self._blink_sdk.Write_image(
@@ -615,9 +564,11 @@ class SLM_512(MeadowlarkSLM):
         self._pattern_running = False
         if self._wait_for_trigger:
             self._blink_sdk.Stop_sequence(self._slm_handle)
-            self._hw_pattern_running_thread.join()
+            if self._hw_pattern_running_thread.is_alive():
+                self._hw_pattern_running_thread.join()
         else:
-            self._sw_pattern_running_thread.join()
+            if self._sw_pattern_running_thread.is_alive():
+                self._sw_pattern_running_thread.join()
         logging.debug("sequence stopped")
 
 
@@ -638,6 +589,44 @@ class SLM_1024(MeadowlarkSLM):
                                           self._shape[0] * self._shape[1])
         self._flip_immediate = self._ffi.cast("int", 0)
 
+        self.add_setting(
+            # TODO: Verify if only 1024 version
+            name="SLM_temperature",
+            dtype="float",
+            get_func=self._get_temperature(),
+            set_func=None,
+            values=lambda: "This setting is read only. It returns the temperature of the SLM",
+        )
+
+        self.add_setting(
+            name="ramp_delay",
+            dtype="int",
+            get_func=lambda: int(self._ramp_delay),
+            set_func=self._set_ramp_delay,
+            values=lambda: (1, 32),
+        )
+
+        self.add_setting(
+            name="pre_ramp_slope",
+            dtype="int",
+            get_func=lambda: int(self._pre_ramp_slope),
+            set_func=self._set_pre_ramp_slope,
+            values=lambda: (1, 32),
+        )
+
+        self.add_setting(
+            name="post_ramp_slope",
+            dtype="int",
+            get_func=lambda: int(self._post_ramp_slope),
+            set_func=self._set_post_ramp_slope,
+            values=lambda: (1, 32),
+        )
+
+    def _get_temperature(self):
+        # Presumably this is a 1024 only method.
+        # TODO: verify this point
+        return float(self._blink_sdk.Read_SLM_temperature(self._slm_handle, self._board))
+
     def _write_pattern(self, image):
         _r = self._blink_sdk.Write_image(
             self._slm_handle,
@@ -652,6 +641,36 @@ class SLM_1024(MeadowlarkSLM):
         if int(_r):
             raise Exception(self._get_last_error())
 
+    # TODO: verify if these ramp parameters are exclusive to 1024 versions of the SLM. Modify add settings accordingly.
+    def _set_ramp_delay(self, ramp_delay):
+        prev = int(self._ramp_delay)
+        self._ramp_delay = self._ffi.cast("unsigned int", ramp_delay)
+        _r = self._blink_sdk.SetRampDelay(self._slm_handle, self._board, self._ramp_delay)
+        if int(_r):
+            self._ramp_delay = self._ffi.cast("unsigned int", prev)
+            raise Exception(self._get_last_error())
+        else:
+            return None
+
+    def _set_pre_ramp_slope(self, pre_ramp_slope):
+        prev = int(self._pre_ramp_slope)
+        self._pre_ramp_slope = self._ffi.cast("unsigned int", pre_ramp_slope)
+        _r = self._blink_sdk.SetPreRampSlope(self._slm_handle, self._board, self._pre_ramp_slope)
+        if int(_r):
+            self._pre_ramp_slope = self._ffi.cast("unsigned int", prev)
+            raise Exception(self._get_last_error())
+        else:
+            return None
+
+    def _set_post_ramp_slope(self, post_ramp_slope):
+        prev = int(self._post_ramp_slope)
+        self._post_ramp_slope = self._ffi.cast("unsigned int", post_ramp_slope)
+        _r = self._blink_sdk.SetPostRampSlope(self._slm_handle, self._board, self._post_ramp_slope)
+        if int(_r):
+            self._post_ramp_slope = self._ffi.cast("unsigned int", prev)
+            raise Exception(self._get_last_error())
+        else:
+            return None
 
 # class OldInterface():
 #     """
