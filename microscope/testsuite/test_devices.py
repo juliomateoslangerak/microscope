@@ -330,7 +330,18 @@ class DeformableMirrorTests(DeviceTests):
 
 
 class SLMTests(DeviceTests):
-    pass
+    """Collection of test cases for spatial light modulators.
+
+    Should have the following properties defined during `setUp`:
+        `shape` (tuple(int, int)): SLM shape
+        `device` (DeformableMirror): the microscope device instance
+        `fake`: an object with the method `get_current_pattern`
+    """
+
+    def assert_current_pattern(self, expected_pattern, msg=""):
+        np.testing.assert_array_equal(
+            self.fake.get_current_pattern(), expected_pattern, msg
+        )
 
 
 class DSPTests(DeviceTests):
