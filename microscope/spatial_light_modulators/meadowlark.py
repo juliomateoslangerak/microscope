@@ -112,7 +112,6 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
     :param ram_write_enable:
     :param use_gpu:
     :param max_transients:
-    :param true_frames:
     """
 
     def __init__(
