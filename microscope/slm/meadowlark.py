@@ -301,7 +301,7 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
     
     @property
     def trigger_type(self) -> microscope.TriggerType:
-        if self._wait_for_trigger:
+        if bool(self._wait_for_trigger):
             return TriggerType.FALLING_EDGE
         else:
             return TriggerType.SOFTWARE
@@ -319,8 +319,11 @@ class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
                 "Only TriggerMode.ONCE is supported by this SLM"
             )
 
-        self._wait_for_trigger = 0 if ttype == TriggerType.SOFTWARE else 1
-    
+        if ttype == TriggerType.SOFTWARE:
+            self._wait_for_trigger = self._ffi.cast("int", 0)
+        else:
+            self._wait_for_trigger = self._ffi.cast("int", 1)
+
     @requires_slm
     def _get_shape(self):
         return self._shape
@@ -529,7 +532,7 @@ class SLM_512(MeadowlarkSLM):
             logging.debug("Sequence already running. Restarting it.")
             self._stop_sequence()
             self._pattern_running = True
-        if self._wait_for_trigger:
+        if bool(self._wait_for_trigger):
             self._hw_pattern_running_thread.start()
         else:
             self._sw_pattern_running_thread.start()
@@ -562,7 +565,7 @@ class SLM_512(MeadowlarkSLM):
     @requires_slm
     def _stop_sequence(self):
         self._pattern_running = False
-        if self._wait_for_trigger:
+        if bool(self._wait_for_trigger):
             self._blink_sdk.Stop_sequence(self._slm_handle)
             if self._hw_pattern_running_thread.is_alive():
                 self._hw_pattern_running_thread.join()
