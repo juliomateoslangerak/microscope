@@ -421,6 +421,16 @@ class SimulatedSLM(
     def _get_shape(self) -> Tuple[int, int]:
         return self._shape
 
+    def _do_enable(self):
+        self._pattern_idx = 0
+        return True
+
+    def _do_disable(self):
+        self._pattern_idx = -1
+
+    def _do_trigger(self):
+        self._pattern_idx += 1
+
     def _do_apply_pattern(self, pattern, wavelength):
         pass
 

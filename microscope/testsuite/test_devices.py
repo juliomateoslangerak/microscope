@@ -335,13 +335,85 @@ class SLMTests(DeviceTests):
     Should have the following properties defined during `setUp`:
         `shape` (tuple(int, int)): SLM shape
         `device` (SpatialLightModulator): the microscope device instance
-        `fake`: an object with the method `get_current_pattern`
     """
+    # device = simulators.SimulatedSLM()
+    def test_get_shape(self):
+        self.assertEqual(self.device.get_shape(), self.shape)
 
-    def assert_current_pattern(self, expected_pattern, msg=""):
-        np.testing.assert_array_equal(
-            self.fake.get_current_pattern(), expected_pattern, msg
-        )
+    def test_apply_pattern_wavelength(self):
+        pattern = np.full(self.shape, 0.5, dtype=np.float32)
+        self.device.apply_pattern(pattern=pattern, wavelength=532)
+
+    def test_apply_pattern_no_wavelength(self):
+        pattern = np.full(self.shape, 0.5, dtype=np.float32)
+        self.device.apply_pattern(pattern=pattern)
+
+    def test_apply_pattern_wrong_shape(self):
+        wrong_shape = (self.shape[0] + 1, self.shape[1])
+        pattern = np.full(wrong_shape, 0.5, dtype=np.float32)
+        with self.assertRaises(ValueError):
+            self.device.apply_pattern(pattern=pattern)
+
+    def test_apply_pattern_wrong_dimension(self):
+        wrong_dimensions = (self.shape[0], self.shape[1], 1)
+        pattern = np.full(wrong_dimensions, 0.5, dtype=np.float32)
+        with self.assertRaises(ValueError):
+            self.device.apply_pattern(pattern=pattern)
+
+    def test_apply_pattern_wrong_dtype(self):
+        pattern = np.full(self.shape, 5, dtype=np.int32)
+        with self.assertRaises(ValueError):
+            self.device.apply_pattern(pattern=pattern)
+
+    def test_queue_patterns_single_wavelength(self):
+        shape = (5, self.shape[0], self.shape[1])
+        patterns = np.full(self.shape, 0.5, dtype=np.float32)
+        self.device.queue_patterns(patterns=patterns, wavelengths=532)
+
+    def test_queue_patterns_multiple_wavelengths(self):
+        queue_length = 5
+        shape = (queue_length, self.shape[0], self.shape[1])
+        patterns = np.full(shape, 0.5, dtype=np.float32)
+        self.device.queue_patterns(patterns=patterns, wavelengths=[532]*queue_length)
+
+    def test_queue_patterns_wrong_shape(self):
+        wrong_shape = (5, self.shape[0] + 1, self.shape[1])
+        patterns = np.full(wrong_shape, 0.5, dtype=np.float32)
+        with self.assertRaises(ValueError):
+            self.device.queue_patterns(patterns=patterns, wavelengths=532)
+
+    def test_queue_patterns_wrong_dimension(self):
+        queue_length = 5
+        wrong_dimensions = (queue_length, self.shape[0], self.shape[1], 1)
+        patterns = np.full(wrong_dimensions, 0.5, dtype=np.float32)
+        with self.assertRaises(ValueError):
+            self.device.queue_patterns(patterns=patterns, wavelengths=532)
+
+    def test_queue_patterns_wrong_wavelength_length(self):
+        queue_length = 5
+        shape = (queue_length, self.shape[0], self.shape[1])
+        patterns = np.full(shape, 0.5, dtype=np.float32)
+        wrong_wavelengths = [532] * (queue_length + 1)
+        with self.assertRaises(ValueError):
+            self.device.queue_patterns(patterns=patterns, wavelengths=wrong_wavelengths)
+
+    def test_queue_run(self):
+        queue_length = 5
+        shape = (queue_length, self.shape[0], self.shape[1])
+        patterns = np.full(shape, 0.5, dtype=np.float32)
+
+        self.device.disable()
+        self.device.queue_patterns(patterns=patterns, wavelengths=[532]*queue_length)
+        self.assertEqual(-1, self.device.get_pattern_idx())
+
+        self.device.enable()
+
+        for i in range(queue_length):
+            self.assertEqual(i, self.device.get_pattern_idx())
+            self.device.trigger()
+
+        self.device.disable()
+        self.assertEqual(-1, self.device.get_pattern_idx())
 
 
 class DSPTests(DeviceTests):
@@ -540,9 +612,15 @@ class TestDummyDeformableMirror(unittest.TestCase, DeformableMirrorTests):
         self.fake = self.device
 
 
-class TestDummySLM(unittest.TestCase, SLMTests):
+class TestDummyLegacySLM(unittest.TestCase, DeviceTests):
     def setUp(self):
         self.device = dummies.DummySLM()
+
+
+class TestDummySLM(unittest.TestCase, SLMTests):
+    def setUp(self):
+        self.shape = (512, 512)
+        self.device = simulators.SimulatedSLM(self.shape)
 
 
 class TestDummyDSP(unittest.TestCase, DSPTests):
