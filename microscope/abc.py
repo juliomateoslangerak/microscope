@@ -1224,12 +1224,11 @@ class SLM(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
                 "PATTERNS has %d dimensions (must be 2 or 3)" % patterns.ndim
             )
 
-        if patterns.ndim == 3:
-            if len(wavelengths) != patterns.shape[0]:
-                raise ValueError(
-                    "The length of the wavelengths list %d does not match the number of patterns to load %d"
-                    % (len(wavelengths), patterns.shape[0],)
-                )
+        if patterns.ndim == 3 and len(wavelengths) != patterns.shape[0]:
+            raise ValueError(
+                "The length of the wavelengths list %d does not match the number of patterns to load %d"
+                % (len(wavelengths), patterns.shape[0],)
+            )
         if (patterns.shape[-2], patterns.shape[-1]) != self.get_shape():
             raise ValueError(
                 "PATTERNS shape %s does not match the SLM's shape %s"
