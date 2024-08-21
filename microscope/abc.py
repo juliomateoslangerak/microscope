@@ -1262,6 +1262,8 @@ class SLM(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             raise microscope.IncompatibleStateError(
                 "apply_pattern requires software trigger type"
             )
+        if pattern.ndim != 2:
+            raise ValueError(f"PATTERN must be of shape {self.get_shape()}")
         self._validate_patterns(pattern, wavelength)
         self._do_apply_pattern(pattern, wavelength)
 
