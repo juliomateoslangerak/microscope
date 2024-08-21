@@ -334,7 +334,7 @@ class SLMTests(DeviceTests):
 
     Should have the following properties defined during `setUp`:
         `shape` (tuple(int, int)): SLM shape
-        `device` (DeformableMirror): the microscope device instance
+        `device` (SpatialLightModulator): the microscope device instance
         `fake`: an object with the method `get_current_pattern`
     """
 
