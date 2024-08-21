@@ -1216,6 +1216,9 @@ class SLM(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         the clipping before sending the values.
 
         """
+        if patterns.dtype != np.float32:
+            raise ValueError("PATTERNS must be of type float32")
+
         if 2 > patterns.ndim > 3:
             raise ValueError(
                 "PATTERNS has %d dimensions (must be 2 or 3)" % patterns.ndim
