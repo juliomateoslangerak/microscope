@@ -94,7 +94,7 @@ def transform_16_to_8_bit(array, fitting=None):
         raise ValueError("The datatype is neither uint8 or uint16")
 
 
-class MeadowlarkSLM(microscope.abc.SpatialLightModulator, ABC):
+class MeadowlarkSLM(microscope.abc.SLM, ABC):
     """Meadowlark Spatial Light Modulator.
 
     This microscope device is for controlling Meadowlark Optics' Spatial Light

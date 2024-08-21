@@ -410,9 +410,9 @@ class SimulatedDeformableMirror(
         return self._current_pattern
 
 
-class SimulatedSpatialLightModulator(
+class SimulatedSLM(
     microscope._utils.OnlyTriggersOnceOnSoftwareMixin,
-    microscope.abc.SpatialLightModulator,
+    microscope.abc.SLM,
 ):
     def __init__(self, shape: Tuple[int, int] = (512, 512), **kwargs):
         super().__init__(**kwargs)
