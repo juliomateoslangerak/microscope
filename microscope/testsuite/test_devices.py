@@ -397,7 +397,7 @@ class SLMTests(DeviceTests):
         with self.assertRaises(ValueError):
             self.device.queue_patterns(patterns=patterns, wavelengths=wrong_wavelengths)
 
-    def test_queue_run(self):
+    def test_queue_start(self):
         queue_length = 5
         shape = (queue_length, self.shape[0], self.shape[1])
         patterns = np.full(shape, 0.5, dtype=np.float32)
@@ -411,6 +411,30 @@ class SLMTests(DeviceTests):
         for i in range(queue_length):
             self.assertEqual(i, self.device.get_pattern_idx())
             self.device.trigger()
+
+        self.device.disable()
+        self.assertEqual(-1, self.device.get_pattern_idx())
+
+    def test_queue_restart(self):
+        queue_length = 5
+        shape = (queue_length, self.shape[0], self.shape[1])
+        patterns = np.full(shape, 0.5, dtype=np.float32)
+
+        self.device.disable()
+        self.device.queue_patterns(patterns=patterns, wavelengths=[532]*queue_length)
+        self.assertEqual(-1, self.device.get_pattern_idx())
+
+        self.device.enable()
+
+        for i in range(queue_length // 2):
+            self.assertEqual(i, self.device.get_pattern_idx())
+            self.device.trigger()
+
+        self.device.disable()
+        self.assertEqual(-1, self.device.get_pattern_idx())
+
+        self.device.enable()
+        self.assertEqual(0, self.device.get_pattern_idx())
 
         self.device.disable()
         self.assertEqual(-1, self.device.get_pattern_idx())
