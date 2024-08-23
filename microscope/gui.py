@@ -308,7 +308,7 @@ class DeformableMirrorWidget(QtWidgets.QWidget):
 
 class SpatialLightModulatorWidget(QtWidgets.QWidget):
     """Display a widget to set the SLM pattern."""
-    def __init__(self, device: microscope.abc.SLM, *args, **kwargs) -> None:
+    def __init__(self, device: microscope.abc.SpatialLightModulator, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._device = device
 

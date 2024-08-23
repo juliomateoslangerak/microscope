@@ -644,7 +644,7 @@ class TestDummyLegacySLM(unittest.TestCase, DeviceTests):
 class TestDummySLM(unittest.TestCase, SLMTests):
     def setUp(self):
         self.shape = (512, 512)
-        self.device = simulators.SimulatedSLM(self.shape)
+        self.device = simulators.SimulatedSpatialLightModulator(self.shape)
 
 
 class TestDummyDSP(unittest.TestCase, DSPTests):

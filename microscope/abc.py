@@ -1171,7 +1171,7 @@ class DeformableMirror(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         return super().trigger()
 
 
-class SLM(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
+class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
     """Base class for Spatial Light Modulators (SLM).
 
     This class is very similar to the Deformable Mirrors abc. We are trying

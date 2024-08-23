@@ -94,7 +94,7 @@ def transform_16_to_8_bit(array, fitting=None):
         raise ValueError("The datatype is neither uint8 or uint16")
 
 
-class MeadowlarkSLM(microscope.abc.SLM, ABC):
+class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC):
     """Meadowlark Spatial Light Modulator.
 
     This microscope device is for controlling Meadowlark Optics' Spatial Light
@@ -418,7 +418,7 @@ class MeadowlarkSLM(microscope.abc.SLM, ABC):
         return self._ffi.string(self._blink_sdk.Get_version_info(self._slm_handle)).decode()
 
 
-class SLM_512(MeadowlarkSLM):
+class SLM_512(MeadowlarkSpatialLightModulator):
     """Meadowlark Spatial Light Modulator with 512x512 resolution."""
     def __init__(self, use_odp: bool = False, **kwargs):
         super().__init__(**kwargs)
@@ -575,7 +575,7 @@ class SLM_512(MeadowlarkSLM):
         logging.debug("sequence stopped")
 
 
-class SLM_1024(MeadowlarkSLM):
+class SLM_1024(MeadowlarkSpatialLightModulator):
     """Meadowlark Spatial Light Modulator with 1024x1024 resolution."""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
