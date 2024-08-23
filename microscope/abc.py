@@ -1182,7 +1182,9 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
     Similarly to deformable mirrors, there is no method to reset
     or clear a deformable mirror. For the sake of uniformity, it is better for
     python-microscope users to pass the pattern they want, probably a
-    pattern that flattens the SLM.
+    pattern that flattens the SLM. Resetting an SLM may be achieved by
+    disabling and enabling the device, but this will not empty the queue
+    of patterns.
 
     The private properties `_patterns` and `_pattern_idx` are
     initialized to `None` to support the queueing of patterns and
