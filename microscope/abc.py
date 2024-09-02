@@ -1182,7 +1182,9 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
     Similarly to deformable mirrors, there is no method to reset
     or clear a deformable mirror. For the sake of uniformity, it is better for
     python-microscope users to pass the pattern they want, probably a
-    pattern that flattens the SLM.
+    pattern that flattens the SLM. Resetting an SLM may be achieved by
+    disabling and enabling the device, but this will not empty the queue
+    of patterns.
 
     The private properties `_patterns` and `_pattern_idx` are
     initialized to `None` to support the queueing of patterns and
@@ -1216,17 +1218,19 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         the clipping before sending the values.
 
         """
+        if patterns.dtype != np.float32:
+            raise ValueError("PATTERNS must be of type float32")
+
         if 2 > patterns.ndim > 3:
             raise ValueError(
                 "PATTERNS has %d dimensions (must be 2 or 3)" % patterns.ndim
             )
 
-        if patterns.ndim == 3:
-            if len(wavelengths) != patterns.shape[0]:
-                raise ValueError(
-                    "The length of the wavelengths list %d does not match the number of patterns to load %d"
-                    % (len(wavelengths), patterns.shape[0],)
-                )
+        if patterns.ndim == 3 and len(wavelengths) != patterns.shape[0]:
+            raise ValueError(
+                "The length of the wavelengths list %d does not match the number of patterns to load %d"
+                % (len(wavelengths), patterns.shape[0],)
+            )
         if (patterns.shape[-2], patterns.shape[-1]) != self.get_shape():
             raise ValueError(
                 "PATTERNS shape %s does not match the SLM's shape %s"
@@ -1259,6 +1263,8 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             raise microscope.IncompatibleStateError(
                 "apply_pattern requires software trigger type"
             )
+        if pattern.ndim != 2:
+            raise ValueError(f"PATTERN must be of shape {self.get_shape()}")
         self._validate_patterns(pattern, wavelength)
         self._do_apply_pattern(pattern, wavelength)
 

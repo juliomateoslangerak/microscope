@@ -45,6 +45,10 @@ Deformable Mirrors
   (:class:`microscope.mirror.bmc.BMCDeformableMirror`)
 - Imagine Optic Mirao 52e (:class:`microscope.mirror.mirao52e.Mirao52e`)
 
+Spatial Light Modulators
+========================
+- Meadowlark Optics 512x512 SLM (:class:`microscope.slm.meadowlark.SLM_512')
+
 Filter Wheels
 =============
 
