@@ -513,6 +513,7 @@ class SLM_512(MeadowlarkSLM):
             pattern = float_to_8_bit(pattern)
             transients = self._compute_transients(pattern)
             self._transient_patterns.append(transients)
+        print(f"queued {len(self._transient_patterns)}")
 
     @requires_slm
     def _compute_transients(self, pattern):
@@ -538,11 +539,14 @@ class SLM_512(MeadowlarkSLM):
             self._sw_pattern_running_thread.start()
 
     def _hw_run_pattern(self):
+        print("called thread")
         while self._pattern_running:
+            print("pattern running")
             if self._transient_patterns:
                 for i, transients in enumerate(self._transient_patterns):
                     if self._pattern_running:
                         self._pattern_idx = i
+                        print(f"waiting for trigger {i}")
                         _r = self._blink_sdk.Write_transient_frames(
                             self._slm_handle,
                             self._board,
