@@ -35,12 +35,15 @@ class SIM_SLM(microscope.abc.Device):
     def __init__(
             self,
             slm: microscope.abc.SpatialLightModulator,
+            sim_diffraction_angle: float = None,
+            sim_modulation_factors: dict[int, int] = None,
+            pixel_pitch: float = 15.0,
     ):
         super().__init__()
         self._slm = slm
-        self._sim_diffraction_angle = None
-        self._sim_modulation_factor = None
-        self._pixel_pitch = 15.0  # microns  # TODO: This should go into the SLM
+        self._sim_diffraction_angle = sim_diffraction_angle
+        self._sim_modulation_factors = sim_modulation_factors
+        self._pixel_pitch = pixel_pitch  # microns  # TODO: This should go into the SLM
         self._sim_phase_offset = 0.
         self._sim_angle_offset = TWO_PI / 5.
         self._sim_num_phases = 5
@@ -55,15 +58,6 @@ class SIM_SLM(microscope.abc.Device):
             get_func=lambda: self._sim_diffraction_angle,
             set_func=self._set_sim_diffraction_angle,
             values=lambda: (0.0, 2.0),
-            readonly=self.get_is_enabled,
-        )
-
-        self.add_setting(
-            name='sim_modulation_factor',
-            dtype="int",
-            get_func=lambda: self._sim_modulation_factor,
-            set_func=lambda x: self._set_sim_modulation_factor(x),
-            values=lambda: (0, 360),
             readonly=self.get_is_enabled,
         )
 
@@ -97,9 +91,6 @@ class SIM_SLM(microscope.abc.Device):
     def _set_sim_diffraction_angle(self, angle):
         self._sim_diffraction_angle = angle
 
-    def _set_sim_modulation_factor(self, factor):
-        self._sim_modulation_factor = factor
-
     def _set_sim_phase_offset(self, offset):
         self._sim_phase_offset = offset
 
@@ -109,11 +100,20 @@ class SIM_SLM(microscope.abc.Device):
     def _set_sim_num_angles(self, num_angles):
         self._sim_num_angles = num_angles
 
+    def set_sim_modulation_factor(self, factors: dict):
+        self._sim_modulation_factors = {int(w): int(f) for w, f in factors.items()}
+
+    def get_sim_modulation_factor(self):
+        return self._sim_modulation_factors
+
     def get_sim_sequence(self):
         return self._sequence_parameters
 
     def get_sequence_index(self):
         return self._slm._pattern_idx
+
+    def get_patterns(self):
+        return self._slm._patterns
 
     def run(self):
         self._slm.enable()
@@ -141,28 +141,25 @@ class SIM_SLM(microscope.abc.Device):
         angles = [self._sim_angle_offset + n * TWO_PI / num_angles
                   for n in range(num_angles)]
 
-        ## Calculate line pitches for each wavelength, once.
-        # d  = m * wavelength / np.sin theta
+        # Calculate line pitches for each wavelength, once.
+        # d = m * wavelength / np.sin theta
         # 1/1000 since wavelength in nm, pixel pitch in microns.
         pitches = {w: w / (1000. * np.sin(self._sim_diffraction_angle * TWO_PI / 360.))
                    for w in wavelengths}
-        # ## Figure out the LUTs we need for each wavelength, once.
-        # if not self.use_ODP:
-        #     luts = {w: self.get_lut(w) for w in set(wavelengths)}
 
-        # retardation for equal powers in 0 and combined +/-1 orders
-        modulation = self._sim_modulation_factor / 360.0
-
-        patterns = np.zeros((len(angle_phase_wavelength), *self._slm.get_shape()), dtype=np.float64)
+        patterns = np.zeros((len(angle_phase_wavelength), *self._slm.get_shape()), dtype=np.float32)
         wavelength_seq = []
         for i, (angle, phase, wavelength) in enumerate(angle_phase_wavelength):
+            # retardation for equal powers in 0 and combined +/-1 orders
+            modulation = self._sim_modulation_factors[wavelength] / 360.0
+
             pp = pitches[wavelength] / self._pixel_pitch
             th = angles[angle]
             ph = phases[phase]
             # Create a stripe float pattern
-            patterns[i] = (0.5 * modulation) + (0.5 * modulation) * np.cos(
+            patterns[i] = ((0.5 * modulation) + (0.5 * modulation) * np.cos(
                         ph + TWO_PI * (np.cos(th) * self.kk + np.sin(th) * self.ll)
-                        / pp)
+                        / pp)).astype(np.float32)
             # Lose two LSBs and pass through the LUT for given wavelength.
             wavelength_seq.append(wavelength)
 
