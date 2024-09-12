@@ -100,10 +100,10 @@ class SIM_SLM(microscope.abc.Device):
     def _set_sim_num_angles(self, num_angles):
         self._sim_num_angles = num_angles
 
-    def set_sim_modulation_factor(self, factors: dict):
+    def set_sim_modulation_factors(self, factors: dict):
         self._sim_modulation_factors = {int(w): int(f) for w, f in factors.items()}
 
-    def get_sim_modulation_factor(self):
+    def get_sim_modulation_factors(self):
         return self._sim_modulation_factors
 
     def get_sim_sequence(self):
