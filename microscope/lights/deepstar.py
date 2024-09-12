@@ -73,13 +73,17 @@ class DeepstarLaser(
             )
             self._has_apc = False
 
+        # self._do_set_power(.2)
+        # self._power_set_point = .2
+
+
     def _write(self, command):
         """Send a command."""
         # We'll need to pad the command out to 16 bytes. There's also
         # a 7-byte mode but we never need to use it.  CR/LF counts
         # towards the byte limit, hence 14 (16-2)
         command = command.ljust(14) + b"\r\n"
-        time.sleep(.1)
+        time.sleep(.8)
         response = self.connection.write(command)
         return response
 
@@ -156,21 +160,24 @@ class DeepstarLaser(
         if not self.get_is_on():
             return 0.0
         if self._has_apc:
-            query = b"P"
-            scale = 0xCCC
+            self._write(b"P?")
+            answer = self._readline()
+            if not answer.startswith(b"P"):
+                raise microscope.DeviceError(
+                    "failed to read power from '%s'" % answer.decode()
+                )
+            level = int(answer[1:], 16)
+            return float(level) / float(0xCCC)
+
         else:
-            query = b"PP"
-            scale = 0xFFF
-
-        self._write(query + b"?")
-        answer = self._readline()
-        if not answer.startswith(query):
-            raise microscope.DeviceError(
-                "failed to read power from '%s'" % answer.decode()
-            )
-
-        level = int(answer[len(query) :], 16)
-        return float(level) / float(scale)
+            self._write(b"PP?")
+            answer = self._readline()
+            if not answer.startswith(b"PP"):
+                raise microscope.DeviceError(
+                    "failed to read power from '%s'" % answer.decode()
+                )
+            level = int(answer[2:], 16)
+            return float(level) / float(0xFFF)
 
     @property
     def trigger_type(self) -> microscope.TriggerType:
