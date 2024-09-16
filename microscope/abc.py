@@ -1293,6 +1293,24 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         """Implement the device specific queuing of patterns."""
         raise NotImplementedError()
 
+    def run_queue(self):
+        if not self.get_is_enabled():
+            raise microscope.DisabledDeviceError("SLM must ne enabled before running the queue")
+        if not self._patterns:
+            raise microscope.MicroscopeError("There are no patterns queued. Load queue before running it.")
+        self._run_queue()
+
+    def _run_queue(self):
+        """Implement the device specific function to run the queue of patterns"""
+        raise NotImplementedError()
+
+    def stop_queue(self):
+        self._stop_queue()
+
+    def _stop_queue(self):
+        """Implement the device specific function to stop the queue of patterns"""
+        raise NotImplementedError()
+
     def _do_trigger(self) -> None:
         """Convenience fallback.
 
