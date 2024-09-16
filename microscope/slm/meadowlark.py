@@ -128,7 +128,8 @@ class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC)
         is_nematic_type: bool = True,
         ram_write_enable: bool = True,
         use_gpu: bool = True,
-        trigger_timeout_ms: int = 0,
+        # TODO: retry what a timeout=0 does
+        trigger_timeout_ms: int = 1000000,
         max_transients: int = 10,
         **kwargs,
     ) -> None:
@@ -223,7 +224,8 @@ class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC)
         self._sw_pattern_running_thread = threading.Thread(target=self._sw_run_pattern)
 
         # Boolean to control triggers use
-        self._wait_for_trigger = self._ffi.cast("int", 0)
+        # TODO: get this from the config
+        self._wait_for_trigger = self._ffi.cast("int", 1)
         # self._external_pulse = self._ffi.cast("int", 1)
         # # TODO: this is presumably the same thing as external_pulse
         self._output_pulse_image_flip = self._ffi.cast("int", 1)
@@ -462,11 +464,6 @@ class SLM_512(MeadowlarkSpatialLightModulator):
         raise NotImplemented()
 
     def _do_enable(self):
-        if bool(self._power_state):
-            print("already enabled")
-            # Already enabled
-            return True
-
         # and if hardware we run from the in a separate thread
         if self._transient_patterns:
             self._start_sequence()
@@ -475,8 +472,6 @@ class SLM_512(MeadowlarkSpatialLightModulator):
         return True
 
     def _do_disable(self):
-        if not bool(self._power_state):
-            return True
         self._stop_sequence()
         self._power_state = self._ffi.cast("int", 0)
         self._blink_sdk.SLM_power(self._slm_handle, self._power_state)
@@ -534,6 +529,7 @@ class SLM_512(MeadowlarkSpatialLightModulator):
             self._stop_sequence()
             self._pattern_running = True
         if bool(self._wait_for_trigger):
+            self._pattern_running = True
             self._hw_pattern_running_thread.start()
         else:
             self._sw_pattern_running_thread.start()
@@ -547,6 +543,8 @@ class SLM_512(MeadowlarkSpatialLightModulator):
                     if self._pattern_running:
                         self._pattern_idx = i
                         print(f"waiting for trigger {i}")
+                        print(f"wait trigger: {bool(self._wait_for_trigger)}")
+                        print(f"timeout: {int(self._trigger_timeout_ms)}")
                         _r = self._blink_sdk.Write_transient_frames(
                             self._slm_handle,
                             self._board,
@@ -573,6 +571,7 @@ class SLM_512(MeadowlarkSpatialLightModulator):
             self._blink_sdk.Stop_sequence(self._slm_handle)
             if self._hw_pattern_running_thread.is_alive():
                 self._hw_pattern_running_thread.join()
+            self._pattern_idx = None
         else:
             if self._sw_pattern_running_thread.is_alive():
                 self._sw_pattern_running_thread.join()
