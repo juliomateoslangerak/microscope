@@ -20,6 +20,8 @@
 
 """Wrapper of a microscope SLM hardware device and implements all the functionality to do 3D-SIM.
 This module is based on Mick Phillips: https://github.com/mickp/bnsdevice"""
+from typing import Dict
+
 import numpy as np
 import logging
 
@@ -35,12 +37,13 @@ class SIM_SLM(microscope.abc.Device):
     def __init__(
             self,
             slm: microscope.abc.SpatialLightModulator,
+            slm_kwargs: Dict,
             sim_diffraction_angle: float = None,
-            sim_modulation_factors: dict[int, int] = None,
+            sim_modulation_factors: Dict[int, int] = None,
             pixel_pitch: float = 15.0,
     ):
         super().__init__()
-        self._slm = slm
+        self._slm = slm(**slm_kwargs)
         self._sim_diffraction_angle = sim_diffraction_angle
         self._sim_modulation_factors = sim_modulation_factors
         self._pixel_pitch = pixel_pitch  # microns  # TODO: This should go into the SLM
@@ -117,9 +120,14 @@ class SIM_SLM(microscope.abc.Device):
 
     def run(self):
         self._slm.enable()
+        if self._slm.get_is_enabled():
+            self.enable()
 
     def stop(self):
         self._slm.disable()
+        if not self._slm.get_is_enabled():
+            self.disable()
+
 
     def set_sim_sequence(self, angle_phase_wavelength):
         """Generate a SIM sequence from a list of parameters.
@@ -165,6 +173,12 @@ class SIM_SLM(microscope.abc.Device):
 
         self._sequence_parameters = angle_phase_wavelength
         self._slm.queue_patterns(patterns, wavelength_seq)
+
+    def _do_enable(self):
+        return self._slm.enable()
+
+    def _do_disable(self):
+        return self._slm.disable()
 
     def _do_shutdown(self) -> None:
         self.stop()
