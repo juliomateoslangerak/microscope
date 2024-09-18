@@ -431,6 +431,9 @@ class SimulatedSpatialLightModulator(
     def _do_trigger(self):
         self._pattern_idx += 1
 
+    def _transform_dtype(self, pattern):
+        return pattern
+
     def _do_apply_pattern(self, pattern, wavelength):
         pass
 
