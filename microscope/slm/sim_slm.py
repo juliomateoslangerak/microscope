@@ -119,15 +119,10 @@ class SIM_SLM(microscope.abc.Device):
         return self._slm._patterns
 
     def run(self):
-        self._slm.enable()
-        if self._slm.get_is_enabled():
-            self.enable()
+        self._slm.run_queue()
 
     def stop(self):
-        self._slm.disable()
-        if not self._slm.get_is_enabled():
-            self.disable()
-
+        self._slm.stop_queue()
 
     def set_sim_sequence(self, angle_phase_wavelength):
         """Generate a SIM sequence from a list of parameters.
