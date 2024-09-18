@@ -20,7 +20,7 @@
 
 """Wrapper of a microscope SLM hardware device and implements all the functionality to do 3D-SIM.
 This module is based on Mick Phillips: https://github.com/mickp/bnsdevice"""
-from typing import Dict
+from typing import Dict, Type
 
 import numpy as np
 import logging
@@ -36,7 +36,7 @@ class SIM_SLM(microscope.abc.Device):
     """
     def __init__(
             self,
-            slm: microscope.abc.SpatialLightModulator,
+            slm: Type[microscope.abc.SpatialLightModulator],
             slm_kwargs: Dict,
             sim_diffraction_angle: float = None,
             sim_modulation_factors: Dict[int, int] = None,
