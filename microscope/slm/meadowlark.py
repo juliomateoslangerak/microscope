@@ -64,36 +64,6 @@ def requires_slm(func):
     return wrapper
 
 
-def float_to_8_bit(array):
-    """Converts a float array values 0.0 to 1.0 to 8-bit. Values outside that range are clipped"""
-    array = np.clip(array, 0.0, 1.0)
-    # TODO: apply some logic to use the most efficient portion of the range in the SLM
-    return np.round(array * 255).astype("uint8")
-
-
-def transform_16_to_8_bit(array, fitting=None):
-    if array.dtype == "uint16":
-        coef = np.array([np.iinfo("uint8").max / np.iinfo("uint16").max])
-        new_array = np.multiply(array, coef).astype("uint8")
-        if fitting is None:
-            return new_array
-        elif fitting == "low":
-            return new_array - new_array.min()
-        elif fitting == "up":
-            return new_array + (np.iinfo("uint8").max - new_array.max())
-        elif fitting == "mid":
-            return new_array + (
-                127
-                - ((new_array.max() - new_array.min()) // 2)
-                + new_array.min()
-            )
-
-    elif array.dtype == "uint8":
-        return array
-    else:
-        raise ValueError("The datatype is neither uint8 or uint16")
-
-
 class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC):
     """Meadowlark Spatial Light Modulator.
 
@@ -375,8 +345,6 @@ class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC)
         if wavelength is not None:
             self._load_wavelength_lut(wavelength)
 
-        pattern = float_to_8_bit(pattern)
-
         self._write_pattern(pattern)
 
     @abstractmethod
@@ -501,10 +469,15 @@ class SLM_512(MeadowlarkSpatialLightModulator):
             if wavelength != current_wavelength:
                 self._load_wavelength_lut(wavelength)
                 current_wavelength = wavelength
-            pattern = float_to_8_bit(pattern)
             transients = self._compute_transients(pattern)
             self._transient_patterns.append(transients)
         print(f"queued {len(self._transient_patterns)}")
+        
+    def _transform_dtype(self, pattern: np.ndarray) -> np.ndarray:
+        """Converts a float array values 0.0 to 1.0 to 8-bit. Values outside that range are clipped"""
+        pattern = np.clip(pattern, 0.0, 1.0)
+        pattern = np.round(pattern * 255).astype("uint8")
+        return pattern + (np.iinfo("uint8").max - pattern.max())
 
     @requires_slm
     def _compute_transients(self, pattern):
