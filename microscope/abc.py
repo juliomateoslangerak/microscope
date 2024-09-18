@@ -1238,6 +1238,11 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             )
 
     @abc.abstractmethod
+    def _transform_dtype(self, pattern: np.ndarray) -> np.ndarray:
+        """Transform the pattern to the appropriate dtype for the SLM."""
+        raise NotImplementedError()
+
+    @abc.abstractmethod
     def _do_apply_pattern(self, pattern: np.ndarray, wavelength: int) -> None:
         raise NotImplementedError()
 
@@ -1266,6 +1271,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         if pattern.ndim != 2:
             raise ValueError(f"PATTERN must be of shape {self.get_shape()}")
         self._validate_patterns(pattern, wavelength)
+        pattern = self._transform_dtype(pattern)
         self._do_apply_pattern(pattern, wavelength)
 
     def queue_patterns(self, patterns: np.ndarray, wavelengths: Union[List[int], int]) -> None:
@@ -1283,6 +1289,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         if isinstance(wavelengths, int):
             wavelengths = [wavelengths] * patterns.shape[0]
         self._validate_patterns(patterns, wavelengths)
+        patterns = self._transform_dtype(patterns)
         self._patterns = patterns
         self._wavelengths = wavelengths
         self._pattern_idx = -1  # none is applied yet
