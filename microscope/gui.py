@@ -308,7 +308,10 @@ class DeformableMirrorWidget(QtWidgets.QWidget):
 
 class SpatialLightModulatorWidget(QtWidgets.QWidget):
     """Display a widget to set the SLM pattern."""
-    def __init__(self, device: microscope.abc.SpatialLightModulator, *args, **kwargs) -> None:
+
+    def __init__(
+        self, device: microscope.abc.SpatialLightModulator, *args, **kwargs
+    ) -> None:
         super().__init__(*args, **kwargs)
         self._device = device
 
@@ -326,11 +329,19 @@ class SpatialLightModulatorWidget(QtWidgets.QWidget):
         self._wavelength_box.valueChanged.connect(self._set_wavelength)
 
         self._pattern_menu = QtWidgets.QMenu(parent=self)
-        self._pattern_menu.addAction("Clear", self._clearPattern).triggered.connect(self._clearPattern)
-        self._pattern_menu.addAction("Random", self._randomPattern).triggered.connect(self._randomPattern)
-        self._pattern_menu.addAction("Lines", self._linesPattern).triggered.connect(self._linesPattern)
+        self._pattern_menu.addAction(
+            "Clear", self._clearPattern
+        ).triggered.connect(self._clearPattern)
+        self._pattern_menu.addAction(
+            "Random", self._randomPattern
+        ).triggered.connect(self._randomPattern)
+        self._pattern_menu.addAction(
+            "Lines", self._linesPattern
+        ).triggered.connect(self._linesPattern)
 
-        self._pattern_button = QtWidgets.QPushButton("Pattern Options", parent=self)
+        self._pattern_button = QtWidgets.QPushButton(
+            "Pattern Options", parent=self
+        )
         self._pattern_button.setMenu(self._pattern_menu)
 
         self._apply_button = QtWidgets.QPushButton("Apply", parent=self)
@@ -373,7 +384,9 @@ class SpatialLightModulatorWidget(QtWidgets.QWidget):
 
     def _apply_pattern(self) -> None:
         qt_img = QtGui.QImage(
-            self._pattern.tobytes(), *self._pattern.shape, QtGui.QImage.Format_Grayscale8
+            self._pattern.tobytes(),
+            *self._pattern.shape,
+            QtGui.QImage.Format_Grayscale8,
         )
         self._view.setPixmap(QtGui.QPixmap.fromImage(qt_img))
         self._device.apply_pattern(self._pattern, self._wavelength)
@@ -384,7 +397,9 @@ class SpatialLightModulatorWidget(QtWidgets.QWidget):
 
     def _randomPattern(self) -> None:
         print("random")
-        self._pattern = np.random.randint(0, 256, self._pattern.shape, dtype=np.uint8)
+        self._pattern = np.random.randint(
+            0, 256, self._pattern.shape, dtype=np.uint8
+        )
 
     def _linesPattern(self) -> None:
         for i in range(self._pattern.shape[0]):

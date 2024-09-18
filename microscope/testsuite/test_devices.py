@@ -336,6 +336,7 @@ class SLMTests(DeviceTests):
         `shape` (tuple(int, int)): SLM shape
         `device` (SpatialLightModulator): the microscope device instance
     """
+
     # device = simulators.SimulatedSLM()
     def test_get_shape(self):
         self.assertEqual(self.device.get_shape(), self.shape)
@@ -374,7 +375,9 @@ class SLMTests(DeviceTests):
         queue_length = 5
         shape = (queue_length, self.shape[0], self.shape[1])
         patterns = np.full(shape, 0.5, dtype=np.float32)
-        self.device.queue_patterns(patterns=patterns, wavelengths=[532]*queue_length)
+        self.device.queue_patterns(
+            patterns=patterns, wavelengths=[532] * queue_length
+        )
 
     def test_queue_patterns_wrong_shape(self):
         wrong_shape = (5, self.shape[0] + 1, self.shape[1])
@@ -395,7 +398,9 @@ class SLMTests(DeviceTests):
         patterns = np.full(shape, 0.5, dtype=np.float32)
         wrong_wavelengths = [532] * (queue_length + 1)
         with self.assertRaises(ValueError):
-            self.device.queue_patterns(patterns=patterns, wavelengths=wrong_wavelengths)
+            self.device.queue_patterns(
+                patterns=patterns, wavelengths=wrong_wavelengths
+            )
 
     def test_queue_start(self):
         queue_length = 5
@@ -403,7 +408,9 @@ class SLMTests(DeviceTests):
         patterns = np.full(shape, 0.5, dtype=np.float32)
 
         self.device.disable()
-        self.device.queue_patterns(patterns=patterns, wavelengths=[532]*queue_length)
+        self.device.queue_patterns(
+            patterns=patterns, wavelengths=[532] * queue_length
+        )
         self.assertEqual(-1, self.device.get_pattern_idx())
 
         self.device.enable()
@@ -421,7 +428,9 @@ class SLMTests(DeviceTests):
         patterns = np.full(shape, 0.5, dtype=np.float32)
 
         self.device.disable()
-        self.device.queue_patterns(patterns=patterns, wavelengths=[532]*queue_length)
+        self.device.queue_patterns(
+            patterns=patterns, wavelengths=[532] * queue_length
+        )
         self.assertEqual(-1, self.device.get_pattern_idx())
 
         self.device.enable()

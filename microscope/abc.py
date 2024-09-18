@@ -1208,7 +1208,9 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         """Return a tuple of `(width, height)` corresponding to the shape of the SLM"""
         return self._get_shape()
 
-    def _validate_patterns(self, patterns: np.ndarray, wavelengths: Union[List[int], int]) -> None:
+    def _validate_patterns(
+        self, patterns: np.ndarray, wavelengths: Union[List[int], int]
+    ) -> None:
         """Validate the shape of a series of patterns.
 
         Only validates the shape of the patterns, not if the values
@@ -1229,12 +1231,21 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         if patterns.ndim == 3 and len(wavelengths) != patterns.shape[0]:
             raise ValueError(
                 "The length of the wavelengths list %d does not match the number of patterns to load %d"
-                % (len(wavelengths), patterns.shape[0],)
+                % (
+                    len(wavelengths),
+                    patterns.shape[0],
+                )
             )
         if (patterns.shape[-2], patterns.shape[-1]) != self.get_shape():
             raise ValueError(
                 "PATTERNS shape %s does not match the SLM's shape %s"
-                % ((patterns.shape[-2], patterns.shape[-1],), self.get_shape(),)
+                % (
+                    (
+                        patterns.shape[-2],
+                        patterns.shape[-1],
+                    ),
+                    self.get_shape(),
+                )
             )
 
     @abc.abstractmethod
@@ -1246,7 +1257,9 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
     def _do_apply_pattern(self, pattern: np.ndarray, wavelength: int) -> None:
         raise NotImplementedError()
 
-    def apply_pattern(self, pattern: np.ndarray, wavelength: int = None) -> None:
+    def apply_pattern(
+        self, pattern: np.ndarray, wavelength: int = None
+    ) -> None:
         """Apply this pattern.
 
         Args:
@@ -1274,7 +1287,9 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         pattern = self._transform_dtype(pattern)
         self._do_apply_pattern(pattern, wavelength)
 
-    def queue_patterns(self, patterns: np.ndarray, wavelengths: Union[List[int], int]) -> None:
+    def queue_patterns(
+        self, patterns: np.ndarray, wavelengths: Union[List[int], int]
+    ) -> None:
         """Send a set of patterns to the SLM.
 
         Args:
@@ -1302,9 +1317,13 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
 
     def run_queue(self):
         if not self.get_is_enabled():
-            raise microscope.DisabledDeviceError("SLM must be enabled before running the queue")
+            raise microscope.DisabledDeviceError(
+                "SLM must be enabled before running the queue"
+            )
         if not self._patterns:
-            raise microscope.MicroscopeError("There are no patterns queued. Load queue before running it.")
+            raise microscope.MicroscopeError(
+                "There are no patterns queued. Load queue before running it."
+            )
         self._run_queue()
 
     def _run_queue(self):
@@ -1338,7 +1357,10 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         if self._patterns is None:
             raise microscope.DeviceError("no pattern queued to apply")
         self._pattern_idx += 1
-        self.apply_pattern(self._patterns[self._pattern_idx, :], self._wavelengths[self._pattern_idx])
+        self.apply_pattern(
+            self._patterns[self._pattern_idx, :],
+            self._wavelengths[self._pattern_idx],
+        )
 
     def trigger(self) -> None:
         """Apply the next pattern in the queue."""

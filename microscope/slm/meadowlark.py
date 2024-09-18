@@ -21,7 +21,14 @@ from abc import ABC, abstractmethod
 ## along with Microscope.  If not, see <http://www.gnu.org/licenses/>.
 
 import microscope.abc
-from microscope import DeviceError, IncompatibleStateError, InitialiseError, DisabledDeviceError, UnsupportedFeatureError, LibraryLoadError
+from microscope import (
+    DeviceError,
+    IncompatibleStateError,
+    InitialiseError,
+    DisabledDeviceError,
+    UnsupportedFeatureError,
+    LibraryLoadError,
+)
 from microscope import TriggerType, TriggerMode
 
 import os.path
@@ -64,7 +71,9 @@ def requires_slm(func):
     return wrapper
 
 
-class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC):
+class MeadowlarkSpatialLightModulator(
+    microscope.abc.SpatialLightModulator, ABC
+):
     """Meadowlark Spatial Light Modulator.
 
     This microscope device is for controlling Meadowlark Optics' Spatial Light
@@ -161,7 +170,9 @@ class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC)
             self._default_lut_file = self._luts[default_wavelength]
         self._default_static_lut_file = default_static_lut_file.encode()
         # TODO: apply some logic to get a real path, without escaping characters
-        self._phase_calibration_files_path = phase_calibration_files_path.encode()
+        self._phase_calibration_files_path = (
+            phase_calibration_files_path.encode()
+        )
 
         if self._default_static_lut_file is None:
             self._default_static_regional_lut_file = self._ffi.NULL
@@ -169,10 +180,11 @@ class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC)
             self._default_static_regional_lut_file = self._ffi.new(
                 "char[]",
                 os.path.join(
-                    self._phase_calibration_files_path, self._default_static_lut_file
+                    self._phase_calibration_files_path,
+                    self._default_static_lut_file,
                 ),
             )
-            
+
         # Trigger parameters
 
         self._initialize()
@@ -190,8 +202,12 @@ class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC)
         # One thread is for running the patterns in the hardware and the other
         # is for running the patterns in the software.
         self._pattern_running = False
-        self._hw_queue_running_thread = threading.Thread(target=self._hw_run_queue)
-        self._sw_queue_running_thread = threading.Thread(target=self._sw_run_queue)
+        self._hw_queue_running_thread = threading.Thread(
+            target=self._hw_run_queue
+        )
+        self._sw_queue_running_thread = threading.Thread(
+            target=self._sw_run_queue
+        )
 
         # Boolean to control triggers use
         # TODO: get this from the config
@@ -266,18 +282,18 @@ class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC)
 
         except Exception as e:
             raise InitialiseError("Could not Initialize") from e
-    
+
     @property
     def trigger_mode(self) -> microscope.TriggerMode:
         return TriggerMode.ONCE
-    
+
     @property
     def trigger_type(self) -> microscope.TriggerType:
         if bool(self._wait_for_trigger):
             return TriggerType.FALLING_EDGE
         else:
             return TriggerType.SOFTWARE
-        
+
     def set_trigger(
         self, ttype: microscope.TriggerType, tmode: microscope.TriggerMode
     ) -> None:
@@ -308,7 +324,7 @@ class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC)
     def _load_lut(self, filename):
         lut_file = self._ffi.new(
             "char[]",
-            os.path.join(self._phase_calibration_files_path, filename)
+            os.path.join(self._phase_calibration_files_path, filename),
         )
         _r = self._blink_sdk.Load_LUT_file(
             self._slm_handle, self._board, lut_file
@@ -340,7 +356,9 @@ class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC)
     @requires_slm
     def _do_apply_pattern(self, pattern, wavelength=None):
         if self._pattern_running:
-            raise IncompatibleStateError("Sequence is running. Cannot write single patterns")
+            raise IncompatibleStateError(
+                "Sequence is running. Cannot write single patterns"
+            )
 
         if wavelength is not None:
             self._load_wavelength_lut(wavelength)
@@ -360,9 +378,7 @@ class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC)
         raise NotImplemented()
 
     def _set_trigger_timeout_ms(self, timeout_ms):
-        self._trigger_timeout_ms = self._ffi.cast(
-            "unsigned int", timeout_ms
-        )
+        self._trigger_timeout_ms = self._ffi.cast("unsigned int", timeout_ms)
 
     @requires_slm
     def _set_true_frames(self, true_frames):
@@ -385,11 +401,14 @@ class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC)
             self._output_pulse_image_flip = self._ffi.cast("int", 0)
 
     def _get_version_info(self):
-        return self._ffi.string(self._blink_sdk.Get_version_info(self._slm_handle)).decode()
+        return self._ffi.string(
+            self._blink_sdk.Get_version_info(self._slm_handle)
+        ).decode()
 
 
 class SLM_512(MeadowlarkSpatialLightModulator):
     """Meadowlark Spatial Light Modulator with 512x512 resolution."""
+
     def __init__(self, use_odp: bool = False, **kwargs):
         super().__init__(**kwargs)
         # OverDrive Plus parameters
@@ -398,17 +417,27 @@ class SLM_512(MeadowlarkSpatialLightModulator):
 
         try:
             self._shape = (
-                int(self._blink_sdk.Get_image_width(self._slm_handle, self._board)),
-                int(self._blink_sdk.Get_image_height(self._slm_handle, self._board)),
+                int(
+                    self._blink_sdk.Get_image_width(
+                        self._slm_handle, self._board
+                    )
+                ),
+                int(
+                    self._blink_sdk.Get_image_height(
+                        self._slm_handle, self._board
+                    )
+                ),
             )
         except AttributeError:
             # Some SDK versions do not have the Get_image_width/height methods
             # TODO: Verify if modern SDKs have or it is only exclusive to 1024x1024 versions
             self._shape = (512, 512)
         if self._shape != (512, 512):
-            raise InitialiseError("The shape of the SLM is not 512x512. You may"
-                                  "have initialized the wrong SLM device or used"
-                                  "the wrong device class.")
+            raise InitialiseError(
+                "The shape of the SLM is not 512x512. You may"
+                "have initialized the wrong SLM device or used"
+                "the wrong device class."
+            )
 
         if self._use_odp:
             self._set_true_frames(5)
@@ -424,7 +453,10 @@ class SLM_512(MeadowlarkSpatialLightModulator):
             get_func=lambda: self._use_odp,
             set_func=lambda x: self._set_odp(x),
             values=lambda: "This setting is controlling the use of ODP. Disable device before setting. True or False",
-            readonly=lambda: self.enabled or not self._blink_sdk.Is_slm_transient_constructed(self._slm_handle),
+            readonly=lambda: self.enabled
+            or not self._blink_sdk.Is_slm_transient_constructed(
+                self._slm_handle
+            ),
         )
 
     def _set_odp(self, use_odp):
@@ -472,7 +504,7 @@ class SLM_512(MeadowlarkSpatialLightModulator):
             transients = self._compute_transients(pattern)
             self._transient_patterns.append(transients)
         print(f"queued {len(self._transient_patterns)}")
-        
+
     def _transform_dtype(self, pattern: np.ndarray) -> np.ndarray:
         """Converts a float array values 0.0 to 1.0 to 8-bit. Values outside that range are clipped"""
         pattern = np.clip(pattern, 0.0, 1.0)
@@ -521,7 +553,9 @@ class SLM_512(MeadowlarkSpatialLightModulator):
                             self._output_pulse_image_flip,
                             self._trigger_timeout_ms,
                         )
-                        logging.debug(f"applied pattern index: {self._pattern_idx}")
+                        logging.debug(
+                            f"applied pattern index: {self._pattern_idx}"
+                        )
                         if int(_r):
                             logging.error(self._get_last_error())
                             self._pattern_running = False
@@ -547,19 +581,27 @@ class SLM_512(MeadowlarkSpatialLightModulator):
 
 class SLM_1024(MeadowlarkSpatialLightModulator):
     """Meadowlark Spatial Light Modulator with 1024x1024 resolution."""
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._shape = (
-            int(self._blink_sdk.Get_image_width(self._slm_handle, self._board)),
-            int(self._blink_sdk.Get_image_height(self._slm_handle, self._board)),
+            int(
+                self._blink_sdk.Get_image_width(self._slm_handle, self._board)
+            ),
+            int(
+                self._blink_sdk.Get_image_height(self._slm_handle, self._board)
+            ),
         )
         if self._shape != (1024, 1024):
-            raise InitialiseError("The shape of the SLM is not 1024x1024. You may"
-                                  "have initialized the wrong SLM device or used"
-                                  "the wrong device class.")
+            raise InitialiseError(
+                "The shape of the SLM is not 1024x1024. You may"
+                "have initialized the wrong SLM device or used"
+                "the wrong device class."
+            )
 
-        self._image_size = self._ffi.cast("unsigned int",
-                                          self._shape[0] * self._shape[1])
+        self._image_size = self._ffi.cast(
+            "unsigned int", self._shape[0] * self._shape[1]
+        )
         self._flip_immediate = self._ffi.cast("int", 0)
 
         self.add_setting(
@@ -598,7 +640,9 @@ class SLM_1024(MeadowlarkSpatialLightModulator):
     def _get_temperature(self):
         # Presumably this is a 1024 only method.
         # TODO: verify this point
-        return float(self._blink_sdk.Read_SLM_temperature(self._slm_handle, self._board))
+        return float(
+            self._blink_sdk.Read_SLM_temperature(self._slm_handle, self._board)
+        )
 
     def _write_pattern(self, image):
         _r = self._blink_sdk.Write_image(
@@ -618,7 +662,9 @@ class SLM_1024(MeadowlarkSpatialLightModulator):
     def _set_ramp_delay(self, ramp_delay):
         prev = int(self._ramp_delay)
         self._ramp_delay = self._ffi.cast("unsigned int", ramp_delay)
-        _r = self._blink_sdk.SetRampDelay(self._slm_handle, self._board, self._ramp_delay)
+        _r = self._blink_sdk.SetRampDelay(
+            self._slm_handle, self._board, self._ramp_delay
+        )
         if int(_r):
             self._ramp_delay = self._ffi.cast("unsigned int", prev)
             raise DeviceError(self._get_last_error())
@@ -628,7 +674,9 @@ class SLM_1024(MeadowlarkSpatialLightModulator):
     def _set_pre_ramp_slope(self, pre_ramp_slope):
         prev = int(self._pre_ramp_slope)
         self._pre_ramp_slope = self._ffi.cast("unsigned int", pre_ramp_slope)
-        _r = self._blink_sdk.SetPreRampSlope(self._slm_handle, self._board, self._pre_ramp_slope)
+        _r = self._blink_sdk.SetPreRampSlope(
+            self._slm_handle, self._board, self._pre_ramp_slope
+        )
         if int(_r):
             self._pre_ramp_slope = self._ffi.cast("unsigned int", prev)
             raise DeviceError(self._get_last_error())
@@ -638,7 +686,9 @@ class SLM_1024(MeadowlarkSpatialLightModulator):
     def _set_post_ramp_slope(self, post_ramp_slope):
         prev = int(self._post_ramp_slope)
         self._post_ramp_slope = self._ffi.cast("unsigned int", post_ramp_slope)
-        _r = self._blink_sdk.SetPostRampSlope(self._slm_handle, self._board, self._post_ramp_slope)
+        _r = self._blink_sdk.SetPostRampSlope(
+            self._slm_handle, self._board, self._post_ramp_slope
+        )
         if int(_r):
             self._post_ramp_slope = self._ffi.cast("unsigned int", prev)
             raise DeviceError(self._get_last_error())
