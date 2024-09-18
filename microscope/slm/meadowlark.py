@@ -340,7 +340,7 @@ class MeadowlarkSpatialLightModulator(microscope.abc.SpatialLightModulator, ABC)
     @requires_slm
     def _do_apply_pattern(self, pattern, wavelength=None):
         if self._pattern_running:
-            raise Exception("Sequence is running. Cannot write single patterns")
+            raise IncompatibleStateError("Sequence is running. Cannot write single patterns")
 
         if wavelength is not None:
             self._load_wavelength_lut(wavelength)
@@ -452,13 +452,13 @@ class SLM_512(MeadowlarkSpatialLightModulator):
             self._trigger_timeout_ms,
         )
         if int(_r):
-            raise Exception(self._get_last_error())
+            raise DeviceError(self._get_last_error())
 
     @requires_slm
     def _queue_patterns(self) -> None:
         # Verify that the calculation engine is properly loaded
         if self._blink_sdk.Is_slm_transient_constructed(self._slm_handle) < 0:
-            raise Exception(
+            raise DeviceError(
                 "SLM transient calculation engine not properly constructed"
             )
 
@@ -613,7 +613,7 @@ class SLM_1024(MeadowlarkSpatialLightModulator):
             self._trigger_timeout_ms,
         )
         if int(_r):
-            raise Exception(self._get_last_error())
+            raise DeviceError(self._get_last_error())
 
     # TODO: verify if these ramp parameters are exclusive to 1024 versions of the SLM. Modify add settings accordingly.
     def _set_ramp_delay(self, ramp_delay):
@@ -622,7 +622,7 @@ class SLM_1024(MeadowlarkSpatialLightModulator):
         _r = self._blink_sdk.SetRampDelay(self._slm_handle, self._board, self._ramp_delay)
         if int(_r):
             self._ramp_delay = self._ffi.cast("unsigned int", prev)
-            raise Exception(self._get_last_error())
+            raise DeviceError(self._get_last_error())
         else:
             return None
 
@@ -632,7 +632,7 @@ class SLM_1024(MeadowlarkSpatialLightModulator):
         _r = self._blink_sdk.SetPreRampSlope(self._slm_handle, self._board, self._pre_ramp_slope)
         if int(_r):
             self._pre_ramp_slope = self._ffi.cast("unsigned int", prev)
-            raise Exception(self._get_last_error())
+            raise DeviceError(self._get_last_error())
         else:
             return None
 
@@ -642,6 +642,6 @@ class SLM_1024(MeadowlarkSpatialLightModulator):
         _r = self._blink_sdk.SetPostRampSlope(self._slm_handle, self._board, self._post_ramp_slope)
         if int(_r):
             self._post_ramp_slope = self._ffi.cast("unsigned int", prev)
-            raise Exception(self._get_last_error())
+            raise DeviceError(self._get_last_error())
         else:
             return None
