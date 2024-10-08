@@ -1320,7 +1320,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             raise microscope.DisabledDeviceError(
                 "SLM must be enabled before running the queue"
             )
-        if not self._patterns:
+        if self._patterns is None:
             raise microscope.MicroscopeError(
                 "There are no patterns queued. Load queue before running it."
             )
