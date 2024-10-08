@@ -537,31 +537,24 @@ class SLM_512(MeadowlarkSpatialLightModulator):
     def _hw_run_queue(self):
         print("called thread")
         while self._pattern_running:
-            print("pattern running")
-            if self._transient_patterns:
-                for i, transients in enumerate(self._transient_patterns):
-                    if self._pattern_running:
-                        self._pattern_idx = i
-                        print(f"waiting for trigger {i}")
-                        print(f"wait trigger: {bool(self._wait_for_trigger)}")
-                        print(f"timeout: {int(self._trigger_timeout_ms)}")
-                        _r = self._blink_sdk.Write_transient_frames(
-                            self._slm_handle,
-                            self._board,
-                            transients,
-                            self._wait_for_trigger,
-                            self._output_pulse_image_flip,
-                            self._trigger_timeout_ms,
-                        )
-                        logging.debug(
-                            f"applied pattern index: {self._pattern_idx}"
-                        )
-                        if int(_r):
-                            logging.error(self._get_last_error())
-                            self._pattern_running = False
-                            return
-                    else:
+            for i, transients in enumerate(self._transient_patterns):
+                if self._pattern_running:
+                    self._pattern_idx = i
+                    # print(f"waiting for trigger {i}")
+                    _r = self._blink_sdk.Write_transient_frames(
+                        self._slm_handle,
+                        self._board,
+                        transients,
+                        self._wait_for_trigger,
+                        self._output_pulse_image_flip,
+                        self._trigger_timeout_ms,
+                    )
+                    if int(_r):
+                        logging.info(self._get_last_error())
+                        self._pattern_running = False
                         return
+                else:
+                    return
 
     def _sw_run_queue(self):
         raise NotImplemented()
