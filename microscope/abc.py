@@ -1356,7 +1356,10 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         """
         if self._patterns is None:
             raise microscope.DeviceError("no pattern queued to apply")
+
         self._pattern_idx += 1
+        if self._pattern_idx >= len(self._patterns):
+            self._pattern_idx = 0  # Wrap around
         self.apply_pattern(
             self._patterns[self._pattern_idx, :],
             self._wavelengths[self._pattern_idx],
