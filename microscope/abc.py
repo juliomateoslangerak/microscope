@@ -1362,12 +1362,6 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             self._wavelengths[self._pattern_idx],
         )
 
-    def trigger(self) -> None:
-        """Apply the next pattern in the queue."""
-        # This is just a passthrough to the TriggerTargetMixin class
-        # and only exists for the docstring.
-        return super().trigger()
-
     def get_pattern_idx(self) -> int:
         """Return the index of the pattern that is currently being displayed."""
         # TODO: this function is not implemented in the Mirror class. How is it done?
