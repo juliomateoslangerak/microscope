@@ -316,7 +316,7 @@ class SpatialLightModulatorWidget(QtWidgets.QWidget):
         self._device = device
 
         self._view = QtWidgets.QLabel(parent=self)
-        self._pattern = np.zeros(self._device.get_shape(), dtype=np.uint8)
+        self._pattern = np.zeros(self._device.get_shape(), dtype=np.float32)
         self._wavelength = 488
         self._apply_pattern()
 
@@ -383,8 +383,9 @@ class SpatialLightModulatorWidget(QtWidgets.QWidget):
         self._wavelength = wavelength
 
     def _apply_pattern(self) -> None:
+        normalized_pattern = (self._pattern * 255).astype(np.uint8)
         qt_img = QtGui.QImage(
-            self._pattern.tobytes(),
+            normalized_pattern.tobytes(),
             *self._pattern.shape,
             QtGui.QImage.Format_Grayscale8,
         )
@@ -397,13 +398,14 @@ class SpatialLightModulatorWidget(QtWidgets.QWidget):
 
     def _randomPattern(self) -> None:
         print("random")
-        self._pattern = np.random.randint(
-            0, 256, self._pattern.shape, dtype=np.uint8
+        self._pattern = np.random.random(self._pattern.shape).astype(
+            np.float32
         )
 
     def _linesPattern(self) -> None:
-        for i in range(self._pattern.shape[0]):
-            self._pattern[i, :] = 255 * (i % 2)
+        self._pattern.fill(0.0)
+        for i in range(0, self._pattern.shape[0], 2):
+            self._pattern[i, :] = 1.0
 
 
 class FilterWheelWidget(QtWidgets.QWidget):
