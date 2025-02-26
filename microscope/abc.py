@@ -1418,6 +1418,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
     def get_pattern_idx(self) -> int:
         """Return the index of the pattern that is currently being displayed."""
         # TODO: this function is not implemented in the Mirror class. How is it done?
+        if self._pattern_idx < 0: return None
         return self._pattern_idx
 
 
