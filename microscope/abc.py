@@ -1197,7 +1197,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         self._patterns: Optional[np.ndarray] = None
         # Index of the pattern that is currently applied.
         # If no pattern is applied, it is -1. This makes it easy to run the queues
-        self._pattern_idx: int = None
+        self._pattern_idx: int = -1
         # Flag to indicate if the queue is running
         self._queue_running = False
         self._wavelengths: Optional[List[int]] = None
