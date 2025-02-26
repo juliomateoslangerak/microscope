@@ -201,7 +201,6 @@ class MeadowlarkSpatialLightModulator(
         # Two threads for running the patterns and a boolean to control it.
         # One thread is for running the patterns in the hardware and the other
         # is for running the patterns in the software.
-        self._pattern_running = False
         self._hw_queue_running_thread = threading.Thread(
             target=self._hw_run_queue
         )
@@ -297,7 +296,7 @@ class MeadowlarkSpatialLightModulator(
     def set_trigger(
         self, ttype: microscope.TriggerType, tmode: microscope.TriggerMode
     ) -> None:
-        if self._pattern_running:
+        if self._queue_running:
             raise IncompatibleStateError(
                 "Cannot set trigger while a sequence of patterns is running."
                 "Stop the sequence before setting the trigger type by disabling the device."
@@ -354,15 +353,8 @@ class MeadowlarkSpatialLightModulator(
         raise NotImplemented()
 
     @requires_slm
-    def _do_apply_pattern(self, pattern, wavelength=None):
-        if self._pattern_running:
-            raise IncompatibleStateError(
-                "Sequence is running. Cannot write single patterns"
-            )
-
-        if wavelength is not None:
-            self._load_wavelength_lut(wavelength)
-
+    def _do_apply_pattern(self, pattern, wavelength):
+        self._load_wavelength_lut(wavelength)
         self._write_pattern(pattern)
 
     @abstractmethod
@@ -524,11 +516,7 @@ class SLM_512(MeadowlarkSpatialLightModulator):
     @requires_slm
     def _run_queue(self):
         """Sequence wil restart if already running"""
-        logging.debug("Starting sequence of patterns")
-        if self._pattern_running:
-            logging.debug("Sequence already running. Restarting it.")
-            self._stop_queue()
-        self._pattern_running = True
+        self._queue_running = True
         if bool(self._wait_for_trigger):
             self._hw_queue_running_thread.start()
         else:
@@ -536,9 +524,9 @@ class SLM_512(MeadowlarkSpatialLightModulator):
 
     def _hw_run_queue(self):
         print("called thread")
-        while self._pattern_running:
+        while self._queue_running:
             for i, transients in enumerate(self._transient_patterns):
-                if self._pattern_running:
+                if self._queue_running:
                     self._pattern_idx = i
                     # print(f"waiting for trigger {i}")
                     _r = self._blink_sdk.Write_transient_frames(
@@ -551,7 +539,7 @@ class SLM_512(MeadowlarkSpatialLightModulator):
                     )
                     if int(_r):
                         logging.info(self._get_last_error())
-                        self._pattern_running = False
+                        self._queue_running = False
                         return
                 else:
                     return
@@ -561,7 +549,7 @@ class SLM_512(MeadowlarkSpatialLightModulator):
 
     @requires_slm
     def _stop_queue(self):
-        self._pattern_running = False
+        self._queue_running = False
         if bool(self._wait_for_trigger):
             self._blink_sdk.Stop_sequence(self._slm_handle)
             if self._hw_queue_running_thread.is_alive():

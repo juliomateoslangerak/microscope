@@ -1196,6 +1196,8 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         super().__init__(**kwargs)
         self._patterns: Optional[np.ndarray] = None
         self._pattern_idx: int = None
+        # Flag to indicate if the queue is running
+        self._queue_running = False
         self._wavelengths: Optional[List[int]] = None
         self._shape: Tuple[int, int] = None
         self._default_wavelength: int = default_wavelength_nm
@@ -1289,6 +1291,8 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
 
         self._validate_patterns(pattern, wavelength)
         pattern = self._transform_dtype(pattern)
+        if self.is_queue_running():
+            self.stop_queue()
         self._do_apply_pattern(pattern, wavelength)
 
     def apply_flat_pattern(self, wavelength: int) -> None:
@@ -1321,6 +1325,8 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         patterns = self._transform_dtype(patterns)
         self._patterns = patterns
         self._wavelengths = wavelengths
+        if self._queue_running:
+            self.stop_queue()
         self._pattern_idx = -1  # none is applied yet
         self._queue_patterns()
         # TODO: What is the function to run the patterns in the queue? enable?
@@ -1328,6 +1334,17 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
     def _queue_patterns(self) -> None:
         """Implement the device specific queuing of patterns."""
         raise NotImplementedError()
+
+    def disable(self) -> None:
+        """We want that the SLM, when disabled, it stops any potentially running queue
+        and it loads a flat pattern."""
+        if self.is_queue_running():
+            self.stop_queue()
+        self._do_disable()
+        self.enabled = False
+
+    def is_queue_running(self) -> bool:
+        return self._queue_running
 
     def run_queue(self):
         if not self.get_is_enabled():
@@ -1338,6 +1355,11 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             raise microscope.MicroscopeError(
                 "There are no patterns queued. Load queue before running it."
             )
+        logging.debug("Running queue")
+        if self._queue_running:
+            logging.debug("Queue already running. Restarting it.")
+            self._stop_queue()
+
         self._run_queue()
 
     def _run_queue(self):
