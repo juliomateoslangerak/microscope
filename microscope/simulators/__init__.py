@@ -437,6 +437,14 @@ class SimulatedSpatialLightModulator(
     def _queue_patterns(self) -> None:
         pass
 
+    def _run_queue(self):
+        self._queue_running = True
+        self._pattern_idx = 0
+
+    def _stop_queue(self):
+        self._queue_running = False
+        self._pattern_idx = -1
+
     def _do_shutdown(self) -> None:
         pass
 
