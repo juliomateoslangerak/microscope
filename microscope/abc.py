@@ -1331,8 +1331,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         if isinstance(wavelengths, int):
             wavelengths = [wavelengths] * patterns.shape[0]
         self._validate_patterns(patterns, wavelengths)
-        patterns = self._transform_dtype(patterns)
-        self._patterns = patterns
+        self._patterns = self._transform_dtype(patterns)
         self._wavelengths = wavelengths
         if self._queue_running:
             self.stop_queue()
