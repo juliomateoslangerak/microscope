@@ -1195,6 +1195,8 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
     def __init__(self, default_wavelength_nm, **kwargs) -> None:
         super().__init__(**kwargs)
         self._patterns: Optional[np.ndarray] = None
+        # Index of the pattern that is currently applied.
+        # If no pattern is applied, it is -1. This makes it easy to run the queues
         self._pattern_idx: int = None
         # Flag to indicate if the queue is running
         self._queue_running = False
@@ -1258,6 +1260,13 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def _do_apply_pattern(self, pattern: np.ndarray, wavelength: int) -> None:
+        """Hardware specific function to apply a pattern to the SLM.
+        This method is called by the apply_pattern method, which already takes care of:
+        - checking trigger type
+        - checking pattern shape and type
+        - assign wavelength if None is given
+        - stopping running queues
+        """
         raise NotImplementedError()
 
     def apply_pattern(
@@ -1347,6 +1356,10 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         return self._queue_running
 
     def run_queue(self):
+        """This method is starting to run the queue of preloaded patterns.
+        SLM must be enabled and patterns loaded.
+        If the queue us already running, it will stop it and restart it.
+        """
         if not self.get_is_enabled():
             raise microscope.DisabledDeviceError(
                 "SLM must be enabled before running the queue"
@@ -1367,7 +1380,10 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         raise NotImplementedError()
 
     def stop_queue(self):
+        """This method is stopping the queue of preloaded patterns."""
+        logging.debug("Stopping queue...")
         self._stop_queue()
+        logging.debug("Queue stopped")
 
     def _stop_queue(self):
         """Implement the device specific function to stop the queue of patterns"""
