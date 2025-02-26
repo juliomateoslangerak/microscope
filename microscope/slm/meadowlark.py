@@ -557,7 +557,6 @@ class SLM_512(MeadowlarkSpatialLightModulator):
             self._pattern_idx = None
         elif self._sw_queue_running_thread.is_alive():
             self._sw_queue_running_thread.join()
-        logging.debug("Pattern queue stopped")
 
 
 class SLM_1024(MeadowlarkSpatialLightModulator):
