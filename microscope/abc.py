@@ -1337,7 +1337,6 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             self.stop_queue()
         self._pattern_idx = -1  # none is applied yet
         self._queue_patterns()
-        # TODO: What is the function to run the patterns in the queue? enable?
 
     def _queue_patterns(self) -> None:
         """Implement the device specific queuing of patterns."""
