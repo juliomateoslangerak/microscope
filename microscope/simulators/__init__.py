@@ -428,9 +428,6 @@ class SimulatedSpatialLightModulator(
     def _do_disable(self):
         self._pattern_idx = -1
 
-    def _do_trigger(self):
-        self._pattern_idx += 1
-
     def _transform_dtype(self, pattern):
         return pattern
 
