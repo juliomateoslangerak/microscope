@@ -547,6 +547,10 @@ class SLM_512(MeadowlarkSpatialLightModulator):
     def _sw_run_queue(self):
         raise NotImplemented()
 
+    def _do_trigger(self) -> None:
+        # TODO: implement this function for instances without HW triggers
+        raise NotImplementedError()
+
     @requires_slm
     def _stop_queue(self):
         self._queue_running = False
