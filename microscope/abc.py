@@ -1192,12 +1192,13 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
     """
 
     @abc.abstractmethod
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, default_wavelength_nm, **kwargs) -> None:
         super().__init__(**kwargs)
         self._patterns: Optional[np.ndarray] = None
         self._pattern_idx: int = None
         self._wavelengths: Optional[List[int]] = None
         self._shape: Tuple[int, int] = None
+        self._default_wavelength: int = default_wavelength_nm
 
     @abc.abstractmethod
     def _get_shape(self) -> Tuple[int, int]:
@@ -1283,9 +1284,22 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             )
         if pattern.ndim != 2:
             raise ValueError(f"PATTERN must be of shape {self.get_shape()}")
+        if wavelength is None:
+            wavelength = self._default_wavelength
+
         self._validate_patterns(pattern, wavelength)
         pattern = self._transform_dtype(pattern)
         self._do_apply_pattern(pattern, wavelength)
+
+    def apply_flat_pattern(self, wavelength: int) -> None:
+        """Apply a flat pattern to the SLM.
+
+        Args:
+            wavelength: The wavelength to which the SLM has to be calibrated for that pattern.
+
+        """
+        flat_pattern = np.ones(self.get_shape(), dtype=np.float32)
+        self.apply_pattern(flat_pattern, wavelength)
 
     def queue_patterns(
         self, patterns: np.ndarray, wavelengths: Union[List[int], int]
