@@ -1270,20 +1270,18 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         raise NotImplementedError()
 
     def apply_pattern(
-        self, pattern: np.ndarray, wavelength: int = None
+        self, pattern: np.ndarray, wavelength: int
     ) -> None:
         """Apply this pattern.
 
         Args:
             pattern: A 'XY' ndarray with the phases to be loaded into the SLM. The phases have to be
             in the range [0, 1]. 0=0pi and 1=2pi
-            wavelength: The wavelength to which the SLM has to be calibrated for that pattern. If no
-            wavelength is provided, the SLM will be calibrated to the last wavelength used.
+            wavelength: The wavelength to which the SLM has to be calibrated for that pattern.
 
         Raises:
-            microscope.IncompatibleStateError: if device trigger type is
-                not set to software.
-
+            microscope.IncompatibleStateError: if device trigger type is not set to software.
+            ValueError: if the pattern shape does not match the SLM's shape.
         """
         if self.trigger_type is not microscope.TriggerType.SOFTWARE:
             # An alternative to error is to change the trigger type,
@@ -1295,8 +1293,6 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             )
         if pattern.ndim != 2:
             raise ValueError(f"PATTERN must be of shape {self.get_shape()}")
-        if wavelength is None:
-            wavelength = self._default_wavelength
 
         self._validate_patterns(pattern, wavelength)
         pattern = self._transform_dtype(pattern)
@@ -1304,13 +1300,16 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             self.stop_queue()
         self._do_apply_pattern(pattern, wavelength)
 
-    def apply_flat_pattern(self, wavelength: int) -> None:
+    def apply_flat_pattern(self, wavelength: int = None) -> None:
         """Apply a flat pattern to the SLM.
 
         Args:
             wavelength: The wavelength to which the SLM has to be calibrated for that pattern.
-
+            If no wavelength is provided, the SLM will be calibrated to the last wavelength used.
         """
+        if wavelength is None:
+            wavelength = self._default_wavelength
+
         flat_pattern = np.ones(self.get_shape(), dtype=np.float32)
         self.apply_pattern(flat_pattern, wavelength)
 
