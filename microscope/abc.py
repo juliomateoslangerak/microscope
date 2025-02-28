@@ -1265,7 +1265,6 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         This method is called by the apply_pattern method, which already takes care of:
         - checking trigger type
         - checking pattern shape and type
-        - assign wavelength if None is given
         - stopping running queues
         """
         raise NotImplementedError()
