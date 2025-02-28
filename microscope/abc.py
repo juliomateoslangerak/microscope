@@ -1226,6 +1226,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
 
         """
         if patterns.dtype != np.float32:
+            logging.error("PATTERNS must be of type float32. Patterns are of type %s", patterns.dtype)
             raise ValueError("PATTERNS must be of type float32")
 
         if 2 > patterns.ndim > 3:
@@ -1283,20 +1284,24 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             microscope.IncompatibleStateError: if device trigger type is not set to software.
             ValueError: if the pattern shape does not match the SLM's shape.
         """
+        logging.debug("Applying pattern...")
         if self.trigger_type is not microscope.TriggerType.SOFTWARE:
             # An alternative to error is to change the trigger type,
             # apply the pattern, then restore the trigger type, but
             # that would clear the queue on the device.  It's better
             # to have the user specifically do it.  See issue #61.
+            logging.error("apply_pattern requires software trigger type")
             raise microscope.IncompatibleStateError(
                 "apply_pattern requires software trigger type"
             )
         if pattern.ndim != 2:
-            raise ValueError(f"PATTERN must be of shape {self.get_shape()}")
+            logging.error("PATTERN must be 2D. Applied pattern has shape: %s", self.get_shape())
+            raise ValueError("PATTERN must be 2D")
 
         self._validate_patterns(pattern, wavelength)
         pattern = self._transform_dtype(pattern)
         if self.is_queue_running():
+            logging.debug("Queue running. Stopping it.")
             self.stop_queue()
         self._do_apply_pattern(pattern, wavelength)
 
@@ -1307,6 +1312,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             wavelength: The wavelength to which the SLM has to be calibrated for that pattern.
             If no wavelength is provided, the SLM will be calibrated to the last wavelength used.
         """
+        logging.debug("Applying flat pattern with wavelength %s...", wavelength)
         if wavelength is None:
             wavelength = self._default_wavelength
 
@@ -1325,14 +1331,15 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             be applied to all the patterns.
 
         A convenience fallback is provided for software triggering is provided.
-
         """
+        logging.debug("Queuing patterns...")
         if isinstance(wavelengths, int):
             wavelengths = [wavelengths] * patterns.shape[0]
         self._validate_patterns(patterns, wavelengths)
         self._patterns = self._transform_dtype(patterns)
         self._wavelengths = wavelengths
         if self._queue_running:
+            logging.debug("Queue running. Stopping it.")
             self.stop_queue()
         self._pattern_idx = -1  # none is applied yet
         self._queue_patterns()
@@ -1344,7 +1351,9 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
     def disable(self) -> None:
         """We want that the SLM, when disabled, it stops any potentially running queue
         and it loads a flat pattern."""
+        logging.debug("Disabling SLM...")
         if self.is_queue_running():
+            logging.debug("Queue running. Stopping it.")
             self.stop_queue()
         self._do_disable()
         self.enabled = False
@@ -1360,17 +1369,19 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         Args:
             start_idx: The index of the pattern in the queue to start from. Default is 0.
         """
+        logging.debug("Running queue on index %s...", start_idx)
         if not self.get_is_enabled():
+            logging.error("SLM must be enabled before running the queue")
             raise microscope.DisabledDeviceError(
                 "SLM must be enabled before running the queue"
             )
         if self._patterns is None:
+            logging.error("There are no patterns queued. Load queue before running it.")
             raise microscope.MicroscopeError(
                 "There are no patterns queued. Load queue before running it."
             )
-        logging.debug("Running queue")
         if self._queue_running:
-            logging.debug("Queue already running. Restarting it.")
+            logging.debug("Queue already running. Stopping it before running again.")
             self._stop_queue()
 
         self._run_queue(start_idx)
