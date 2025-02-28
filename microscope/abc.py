@@ -1380,13 +1380,13 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         """Implement the device specific function to run the queue of patterns"""
         raise NotImplementedError()
 
-    def stop_queue(self):
+    def stop_queue(self) -> None:
         """This method is stopping the queue of preloaded patterns."""
         logging.debug("Stopping queue...")
         self._stop_queue()
         logging.debug("Queue stopped")
 
-    def _stop_queue(self):
+    def _stop_queue(self) -> None:
         """Implement the device specific function to stop the queue of patterns"""
         raise NotImplementedError()
 
