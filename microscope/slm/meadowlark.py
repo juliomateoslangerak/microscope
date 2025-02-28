@@ -358,15 +358,23 @@ class MeadowlarkSpatialLightModulator(
         self._write_pattern(pattern)
 
     @abstractmethod
-    def _hw_run_queue(self):
+    def _hw_run_queue(self, start_idx: int):
         """This function is running on a separate thread to write the patterns.
-        This function should be implemented in the subclasses"""
+        This function should be implemented in the subclasses.
+
+        Args:
+            start_idx (int): The index of the pattern to start the sequence.
+        """
         raise NotImplemented()
 
     @abstractmethod
-    def _sw_run_queue(self):
+    def _sw_run_queue(self, start_idx: int):
         """This function is running on a separate thread to write the patterns.
-        This function should be implemented in the subclasses"""
+        This function should be implemented in the subclasses.
+
+        Args:
+            start_idx (int): The index of the pattern to start the sequence.
+        """
         raise NotImplemented()
 
     def _set_trigger_timeout_ms(self, timeout_ms):
@@ -514,7 +522,7 @@ class SLM_512(MeadowlarkSpatialLightModulator):
         return transients
 
     @requires_slm
-    def _run_queue(self):
+    def _run_queue(self, start_idx):
         """Sequence wil restart if already running"""
         self._queue_running = True
         if bool(self._wait_for_trigger):
@@ -522,10 +530,13 @@ class SLM_512(MeadowlarkSpatialLightModulator):
         else:
             self._sw_queue_running_thread.start()
 
-    def _hw_run_queue(self):
-        print("called thread")
+    def _hw_run_queue(self, start_idx):
+        first_iteration = True
         while self._queue_running:
             for i, transients in enumerate(self._transient_patterns):
+                if first_iteration and i < start_idx:
+                    continue
+                first_iteration = False
                 if self._queue_running:
                     self._pattern_idx = i
                     # print(f"waiting for trigger {i}")
@@ -544,7 +555,7 @@ class SLM_512(MeadowlarkSpatialLightModulator):
                 else:
                     return
 
-    def _sw_run_queue(self):
+    def _sw_run_queue(self, start_idx):
         raise NotImplemented()
 
     def _do_trigger(self) -> None:

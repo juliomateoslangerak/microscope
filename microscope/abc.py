@@ -1353,10 +1353,13 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
     def is_queue_running(self) -> bool:
         return self._queue_running
 
-    def run_queue(self):
+    def run_queue(self, start_idx: int = 0) -> None:
         """This method is starting to run the queue of preloaded patterns.
         SLM must be enabled and patterns loaded.
         If the queue us already running, it will stop it and restart it.
+
+        Args:
+            start_idx: The index of the pattern in the queue to start from. Default is 0.
         """
         if not self.get_is_enabled():
             raise microscope.DisabledDeviceError(
@@ -1371,9 +1374,9 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
             logging.debug("Queue already running. Restarting it.")
             self._stop_queue()
 
-        self._run_queue()
+        self._run_queue(start_idx)
 
-    def _run_queue(self):
+    def _run_queue(self, start_idx: int) -> None:
         """Implement the device specific function to run the queue of patterns"""
         raise NotImplementedError()
 
