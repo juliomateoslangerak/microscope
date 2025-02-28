@@ -417,25 +417,35 @@ class SimulatedSpatialLightModulator(
     def __init__(self, shape: Tuple[int, int] = (512, 512), **kwargs):
         super().__init__(**kwargs)
         self._shape = shape
+        self._active_pattern = None
+        self._active_wavelength = None
 
     def _get_shape(self) -> Tuple[int, int]:
         return self._shape
 
     def _do_enable(self):
-        self._pattern_idx = 0
         return True
 
     def _do_disable(self):
-        self._pattern_idx = -1
+        return True
 
     def _transform_dtype(self, pattern):
-        return pattern
+        # We convert to a more suitable dtype for display np.uint8
+        return (pattern * 255).astype(np.uint8)
 
     def _do_apply_pattern(self, pattern, wavelength):
-        pass
+        self._active_pattern = pattern
+        self._active_wavelength = wavelength
 
     def _queue_patterns(self) -> None:
         pass
+
+    def _do_trigger(self) -> None:
+        self._pattern_idx += 1
+        if self._pattern_idx >= len(self._patterns):
+            self._pattern_idx = 0
+        self._active_pattern = self._patterns[self._pattern_idx]
+        self._active_wavelength = self._wavelengths[self._pattern_idx]
 
     def _run_queue(self, pattern_idx: int) -> None:
         self._queue_running = True
