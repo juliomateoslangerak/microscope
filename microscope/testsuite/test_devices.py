@@ -334,6 +334,7 @@ class SLMTests(DeviceTests):
 
     Should have the following properties defined during `setUp`:
         `shape` (tuple(int, int)): SLM shape
+        'wavelength' (int): Default wavelength
         `device` (SpatialLightModulator): the microscope device instance
     """
 
@@ -347,24 +348,28 @@ class SLMTests(DeviceTests):
 
     def test_apply_pattern_no_wavelength(self):
         pattern = np.full(self.shape, 0.5, dtype=np.float32)
-        self.device.apply_pattern(pattern=pattern)
+        with self.assertRaises(TypeError):
+            self.device.apply_pattern(pattern=pattern)
 
     def test_apply_pattern_wrong_shape(self):
         wrong_shape = (self.shape[0] + 1, self.shape[1])
         pattern = np.full(wrong_shape, 0.5, dtype=np.float32)
+        wavelength = 532
         with self.assertRaises(ValueError):
-            self.device.apply_pattern(pattern=pattern)
+            self.device.apply_pattern(pattern=pattern, wavelength=wavelength)
 
     def test_apply_pattern_wrong_dimension(self):
         wrong_dimensions = (self.shape[0], self.shape[1], 1)
         pattern = np.full(wrong_dimensions, 0.5, dtype=np.float32)
+        wavelength = 532
         with self.assertRaises(ValueError):
-            self.device.apply_pattern(pattern=pattern)
+            self.device.apply_pattern(pattern=pattern, wavelength=wavelength)
 
     def test_apply_pattern_wrong_dtype(self):
         pattern = np.full(self.shape, 5, dtype=np.int32)
+        wavelength = 532
         with self.assertRaises(ValueError):
-            self.device.apply_pattern(pattern=pattern)
+            self.device.apply_pattern(pattern=pattern, wavelength=wavelength)
 
     def test_queue_patterns_single_wavelength(self):
         shape = (5, self.shape[0], self.shape[1])
@@ -411,16 +416,17 @@ class SLMTests(DeviceTests):
         self.device.queue_patterns(
             patterns=patterns, wavelengths=[532] * queue_length
         )
-        self.assertEqual(-1, self.device.get_pattern_idx())
+        self.assertEqual(None, self.device.get_pattern_idx())
 
         self.device.enable()
+        self.device.run_queue()
 
         for i in range(queue_length):
             self.assertEqual(i, self.device.get_pattern_idx())
             self.device.trigger()
 
         self.device.disable()
-        self.assertEqual(-1, self.device.get_pattern_idx())
+        self.assertEqual(None, self.device.get_pattern_idx())
 
     def test_queue_restart(self):
         queue_length = 5
@@ -431,22 +437,26 @@ class SLMTests(DeviceTests):
         self.device.queue_patterns(
             patterns=patterns, wavelengths=[532] * queue_length
         )
-        self.assertEqual(-1, self.device.get_pattern_idx())
+        self.assertEqual(None, self.device.get_pattern_idx())
 
         self.device.enable()
+        self.device.run_queue()
 
         for i in range(queue_length // 2):
             self.assertEqual(i, self.device.get_pattern_idx())
             self.device.trigger()
 
         self.device.disable()
-        self.assertEqual(-1, self.device.get_pattern_idx())
+        self.assertEqual(None, self.device.get_pattern_idx())
 
         self.device.enable()
+        self.assertEqual(None, self.device.get_pattern_idx())
+
+        self.device.run_queue()
         self.assertEqual(0, self.device.get_pattern_idx())
 
         self.device.disable()
-        self.assertEqual(-1, self.device.get_pattern_idx())
+        self.assertEqual(None, self.device.get_pattern_idx())
 
 
 class DSPTests(DeviceTests):
@@ -653,7 +663,11 @@ class TestDummyLegacySLM(unittest.TestCase, DeviceTests):
 class TestDummySLM(unittest.TestCase, SLMTests):
     def setUp(self):
         self.shape = (512, 512)
-        self.device = simulators.SimulatedSpatialLightModulator(self.shape)
+        self.default_wavelength_nm = 561
+        self.device = simulators.SimulatedSpatialLightModulator(
+            shape=self.shape,
+            default_wavelength_nm=self.default_wavelength_nm
+        )
 
 
 class TestDummyDSP(unittest.TestCase, DSPTests):
