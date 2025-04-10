@@ -1192,7 +1192,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
     """
 
     @abc.abstractmethod
-    def __init__(self, default_wavelength_nm, **kwargs) -> None:
+    def __init__(self, default_wavelength, **kwargs) -> None:
         super().__init__(**kwargs)
         self._patterns: Optional[np.ndarray] = None
         # Index of the pattern that is currently applied.
@@ -1202,7 +1202,7 @@ class SpatialLightModulator(TriggerTargetMixin, Device, metaclass=abc.ABCMeta):
         self._queue_running = False
         self._wavelengths: Optional[List[int]] = None
         self._shape: Tuple[int, int] = None
-        self._default_wavelength: int = default_wavelength_nm
+        self._default_wavelength: int = default_wavelength
 
     @abc.abstractmethod
     def _get_shape(self) -> Tuple[int, int]:
