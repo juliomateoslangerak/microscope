@@ -163,10 +163,10 @@ class MeadowlarkSpatialLightModulator(
 
         # LUTs
         self._luts = {k: v.encode() for k, v in luts.items()}
-        if default_wavelength is None:
+        if self._default_wavelength is None:
             self._default_lut_file = list(self._luts.values())[0]
         else:
-            self._default_lut_file = self._luts[default_wavelength]
+            self._default_lut_file = self._luts[self._default_wavelength]
         self._default_static_lut_file = default_static_lut_file.encode()
         # TODO: apply some logic to get a real path, without escaping characters
         self._phase_calibration_files_path = (
