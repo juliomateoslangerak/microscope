@@ -84,11 +84,11 @@ class MeadowlarkSpatialLightModulator(
 
     :param header_definitions_path: Absolute path to the header definitions from the SDK.
     :param blink_sdk_dll_path: name of, or absolute path to, the SID4_SDK.dll file
-    :param luts_path: Absolute path to the LUT files.
+    :param luts: dictionary with the lut files per wavelength.
     :param default_wavelength:
     :param phase_calibration_files_path:
     :param bit_depth:
-    :param slm_resolution:
+    :param shape:
     :param is_nematic_type:
     :param ram_write_enable:
     :param use_gpu:
