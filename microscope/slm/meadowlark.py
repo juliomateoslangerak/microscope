@@ -102,9 +102,8 @@ class MeadowlarkSpatialLightModulator(
         bit_depth: int,
         luts: dict,
         phase_calibration_files_path: str,
-        default_wavelength: str = None,
-        default_static_lut_file: str = None,
-        is_nematic_type: bool = True,
+        default_static_lut_file: str,
+        is_nematic_type: bool,
         ram_write_enable: bool = True,
         use_gpu: bool = True,
         # TODO: retry what a timeout=0 does
