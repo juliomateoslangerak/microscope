@@ -56,7 +56,6 @@ BIT_DEPTH = 8
 # For non-overdrive  operation  true frames should be set to 3
 TRUE_FRAMES = 3
 
-CLASS_NAME = "BNSDevice_ODP"
 
 
 # DECORATORS
@@ -118,8 +117,6 @@ class MeadowlarkSpatialLightModulator(
 
         super().__init__(**kwargs)
 
-        self._slm_handle = None
-
         self._transient_patterns = []
 
         # Get the SDK library
@@ -166,7 +163,7 @@ class MeadowlarkSpatialLightModulator(
 
         # TODO: MOve to 512?
         # # Verify construction of resources
-        # if self._blink_sdk.Is_slm_transient_constructed(self._slm_handle):
+        # if self._blink_sdk.Is_slm_transient_constructed():
         #     raise InitialiseError(
         #         "Overdrive  frame calculation  engine  was not properly  constructed"
         #     )
@@ -252,7 +249,7 @@ class MeadowlarkSpatialLightModulator(
 
         # Initialize the library, looking for nematic SLMs.
         try:
-            self._slm_handle = self._blink_sdk.Create_SDK(
+            self._blink_sdk.Create_SDK(
                 self._bit_depth,
                 ctypes.byref(self._num_boards_found),
                 ctypes.byref(self._constructed_okay),
@@ -279,21 +276,11 @@ class MeadowlarkSpatialLightModulator(
             raise InitialiseError("Error during Initialization") from e
 
         self._shape = (
-            int(
-                self._blink_sdk.Get_image_width(
-                    self._slm_handle, self._board
-                )
-            ),
-            int(
-                self._blink_sdk.Get_image_height(
-                    self._slm_handle, self._board
-                )
-            ),
+            int(self._blink_sdk.Get_image_width(self._board)),
+            int(self._blink_sdk.Get_image_height(self._board)),
         )
 
-        self._bit_depth = self._blink_sdk.Get_image_depth(
-            self._slm_handle, self._board
-        )
+        self._bit_depth = self._blink_sdk.Get_image_depth(self._board)
 
         self._image_size = self._shape[0] * self._shape[1] * self._bit_depth // 8
 
@@ -332,23 +319,23 @@ class MeadowlarkSpatialLightModulator(
 
     def _do_enable(self):
         self._power_state.value = 1
-        self._blink_sdk.SLM_power(self._slm_handle, self._power_state)
+        self._blink_sdk.SLM_power(self._power_state)
         return True
 
     def _do_disable(self):
         self._power_state.value = 0
-        self._blink_sdk.SLM_power(self._slm_handle, self._power_state)
+        self._blink_sdk.SLM_power(self._power_state)
         return True
 
     def _do_shutdown(self) -> None:
-        self._blink_sdk.Delete_SDK(self._slm_handle)
+        self._blink_sdk.Delete_SDK()
         self._constructed_okay.value = -1
 
     @requires_slm
     def _load_lut(self, filename):
         lut_file = self._phase_calibration_files_path + b"\\" + filename
         _r = self._blink_sdk.Load_LUT_file(
-            self._slm_handle, self._board, lut_file
+            self._board, lut_file
         )
         if int(_r):
             raise DeviceError(self._get_last_error())
@@ -356,7 +343,7 @@ class MeadowlarkSpatialLightModulator(
     @requires_slm
     def _load_linear_lut(self):
         # TODO: verify if this is works
-        _r = self._blink_sdk.Load_linear_LUT(self._slm_handle, self._board)
+        _r = self._blink_sdk.Load_linear_LUT(self._board)
         if int(_r):
             raise DeviceError(self._get_last_error())
 
@@ -367,7 +354,6 @@ class MeadowlarkSpatialLightModulator(
 
     def _write_pattern(self, pattern):
         _r = self._blink_sdk.Write_image(
-            self._slm_handle,
             self._board,
             pattern.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte)),
             self._image_size,
@@ -412,7 +398,7 @@ class MeadowlarkSpatialLightModulator(
     def _get_last_error(self):
         """Returns the last error message from the SLM"""
         self._blink_sdk.Get_last_error_message.restype = ctypes.c_char_p
-        return self._blink_sdk.Get_last_error_message(self._slm_handle)
+        return self._blink_sdk.Get_last_error_message()
 
     def _set_max_transients(self, max_transients):
         self._max_transients.value = max_transients
@@ -422,7 +408,7 @@ class MeadowlarkSpatialLightModulator(
 
     def _get_version_info(self):
         self._blink_sdk.Get_version_info.restype = ctypes.c_char_p
-        return self._blink_sdk.Get_version_info(self._slm_handle)
+        return self._blink_sdk.Get_version_info()
 
 
 class SLM_512(MeadowlarkSpatialLightModulator):
@@ -453,9 +439,7 @@ class SLM_512(MeadowlarkSpatialLightModulator):
             set_func=lambda x: self._set_odp(x),
             values=lambda: "This setting is controlling the use of ODP. Disable device before setting. True or False",
             readonly=lambda: self.enabled
-            or not self._blink_sdk.Is_slm_transient_constructed(
-                self._slm_handle
-            ),
+            or not self._blink_sdk.Is_slm_transient_constructed(),
         )
 
         self.add_setting(
@@ -480,7 +464,6 @@ class SLM_512(MeadowlarkSpatialLightModulator):
         # The 512 SLM has two different calls for loading the image depending on the use of the ODP
         if self._use_odp:
             _r = self._blink_sdk.Write_overdrive_image(
-                self._slm_handle,
                 self._board,
                 pattern.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte)),
                 self._wait_for_trigger,
@@ -490,7 +473,6 @@ class SLM_512(MeadowlarkSpatialLightModulator):
             )
         else:
             _r = self._blink_sdk.Write_image(
-                self._slm_handle,
                 self._board,
                 pattern.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte)),
                 self._image_size,
@@ -507,7 +489,7 @@ class SLM_512(MeadowlarkSpatialLightModulator):
     @requires_slm
     def _queue_patterns(self) -> None:
         # Verify that the calculation engine is properly loaded
-        if self._blink_sdk.Is_slm_transient_constructed(self._slm_handle) < 0:
+        if self._blink_sdk.Is_slm_transient_constructed() < 0:
             raise DeviceError(
                 "SLM transient calculation engine not properly constructed"
             )
@@ -533,12 +515,11 @@ class SLM_512(MeadowlarkSpatialLightModulator):
     def _compute_transients(self, pattern):
         byte_count = ctypes.c_uint(0)
         self._blink_sdk.Calculate_transient_frames(
-            self._slm_handle,
             pattern.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte)),
             ctypes.byref(byte_count)
         )
         transients = (ctypes.c_ubyte * byte_count.value)()
-        self._blink_sdk.Retrieve_transient_frames(self._slm_handle, transients)
+        self._blink_sdk.Retrieve_transient_frames(transients)
         return transients
 
     @requires_slm
@@ -561,7 +542,6 @@ class SLM_512(MeadowlarkSpatialLightModulator):
                     self._pattern_idx = i
                     # print(f"waiting for trigger {i}")
                     _r = self._blink_sdk.Write_transient_frames(
-                        self._slm_handle,
                         self._board,
                         transients,
                         self._wait_for_trigger,
@@ -587,7 +567,7 @@ class SLM_512(MeadowlarkSpatialLightModulator):
     def _stop_queue(self):
         self._queue_running = False
         if self._wait_for_trigger:
-            self._blink_sdk.Stop_sequence(self._slm_handle)
+            self._blink_sdk.Stop_sequence()
             if self._hw_queue_running_thread.is_alive():
                 self._hw_queue_running_thread.join()
             self._pattern_idx = None
@@ -601,7 +581,7 @@ class SLM_512(MeadowlarkSpatialLightModulator):
     @requires_slm
     def _set_true_frames(self, true_frames):
         self._true_frames.value = true_frames
-        self._blink_sdk.Set_true_frames(self._slm_handle, self._true_frames)
+        self._blink_sdk.Set_true_frames(self._true_frames)
 
     def _set_external_pulse(self, external_pulse):
         self._external_pulse.value = external_pulse
@@ -656,7 +636,7 @@ class SLM_1024(MeadowlarkSpatialLightModulator):
         # Presumably this is a 1024 only method.
         # TODO: verify this point
         return float(
-            self._blink_sdk.Read_SLM_temperature(self._slm_handle, self._board)
+            self._blink_sdk.Read_SLM_temperature(self._board)
         )
 
     # TODO: verify if these ramp parameters are exclusive to 1024 versions of the SLM. Modify add settings accordingly.
@@ -664,7 +644,7 @@ class SLM_1024(MeadowlarkSpatialLightModulator):
         prev = self._ramp_delay.value
         self._ramp_delay.value = ramp_delay
         _r = self._blink_sdk.SetRampDelay(
-            self._slm_handle, self._board, self._ramp_delay
+            self._board, self._ramp_delay
         )
         if int(_r):
             self._ramp_delay.value = prev
@@ -676,7 +656,7 @@ class SLM_1024(MeadowlarkSpatialLightModulator):
         prev = self._pre_ramp_slope.value
         self._pre_ramp_slope.value = pre_ramp_slope
         _r = self._blink_sdk.SetPreRampSlope(
-            self._slm_handle, self._board, self._pre_ramp_slope
+            self._board, self._pre_ramp_slope
         )
         if int(_r):
             self._pre_ramp_slope.value = prev
@@ -688,7 +668,7 @@ class SLM_1024(MeadowlarkSpatialLightModulator):
         prev = self._post_ramp_slope.value
         self._post_ramp_slope.value = post_ramp_slope
         _r = self._blink_sdk.SetPostRampSlope(
-            self._slm_handle, self._board, self._post_ramp_slope
+            self._board, self._post_ramp_slope
         )
         if int(_r):
             self._post_ramp_slope.value = prev
