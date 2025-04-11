@@ -23,7 +23,7 @@ DEVICES = [
             "default_wavelength": 561,
             "default_static_lut_file": "SLM_lut.txt",
 
-            "phase_calibration_files_path": Path("C:\\Users\omxt\PycharmProjects\microscope\slm\LUT_files"),
+            "phase_calibration_files_path": Path("C:\\Users\omxt\PycharmProjects\microscope\microscope\slm\LUT_files"),
             # "bit_depth": 8,
             "max_transients": 10,
             "external_trigger": True,
