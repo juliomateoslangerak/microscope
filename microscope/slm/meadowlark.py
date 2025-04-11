@@ -603,6 +603,9 @@ class SLM_512(MeadowlarkSpatialLightModulator):
         self._true_frames.value = true_frames
         self._blink_sdk.Set_true_frames(self._slm_handle, self._true_frames)
 
+    def _set_external_pulse(self, external_pulse):
+        self._external_pulse.value = external_pulse
+
 
 class SLM_1024(MeadowlarkSpatialLightModulator):
     """Meadowlark Spatial Light Modulator with 1024x1024 resolution."""
