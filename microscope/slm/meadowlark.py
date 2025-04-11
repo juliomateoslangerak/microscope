@@ -263,12 +263,12 @@ class MeadowlarkSpatialLightModulator(
             )
             if self._num_boards_found.value == 0:
                 raise InitialiseError(f"No SLM device found: {self._get_last_error()}")
-            elif self._num_boards_found[0] > 1:
+            elif self._num_boards_found.value > 1:
                 raise InitialiseError(
                     f"More than one SLM device found. This module can only handle one device."
                     f"{self._get_last_error()}"
                 )
-            elif self._constructed_okay[0] <= 0:
+            elif self._constructed_okay.value <= 0:
                 raise InitialiseError(
                     f"SLM constructor did not succeed."
                     f"{self._get_last_error()}"
@@ -435,12 +435,12 @@ class SLM_512(MeadowlarkSpatialLightModulator):
         if self._use_odp:
             if self._default_static_lut_file is None:
                 raise InitialiseError("A static LUT file is required for ODP")
-            self._set_true_frames(5)
+            self._true_frames.value = 5
             self._default_static_regional_lut_file = (
                 self._phase_calibration_files_path.join(self._default_static_lut_file)
             )
         else:
-            self._set_true_frames(3)
+            self._true_frames.value = 3
             self._default_static_regional_lut_file = 0
 
         super().__init__(**kwargs)
