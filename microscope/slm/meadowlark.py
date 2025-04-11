@@ -164,11 +164,12 @@ class MeadowlarkSpatialLightModulator(
 
         self._initialize()
 
-        # Verify construction of resources
-        if self._blink_sdk.Is_slm_transient_constructed(self._slm_handle):
-            raise InitialiseError(
-                "Overdrive  frame calculation  engine  was not properly  constructed"
-            )
+        # TODO: MOve to 512?
+        # # Verify construction of resources
+        # if self._blink_sdk.Is_slm_transient_constructed(self._slm_handle):
+        #     raise InitialiseError(
+        #         "Overdrive  frame calculation  engine  was not properly  constructed"
+        #     )
 
         # Load the default LUT
         self._load_lut(self._default_lut_file)
