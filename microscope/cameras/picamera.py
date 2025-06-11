@@ -33,7 +33,6 @@ import microscope.abc
 from microscope import ROI, Binning, TriggerMode, TriggerType
 from microscope.abc import keep_acquiring
 
-
 GPIO_Trigger = 21
 GPIO_CAMLED = 5
 
@@ -140,12 +139,12 @@ class PiCamera(microscope.abc.Camera):
             )
 
     def _fetch_data(self):
-        if self._queue.qsize() is not 0:
-            data = self._queue.get()
-            _logger.info("Sending image")
-            return data
-        else:
+        try:
+            data = self._queue.get_nowait()
+        except queue.Empty:
             return None
+        _logger.info("Sending image")
+        return data
 
     def initialize(self):
         """Initialise the Pi Camera camera.

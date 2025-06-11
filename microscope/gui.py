@@ -35,14 +35,13 @@ import logging
 import queue
 import sys
 import threading
-import typing
+from typing import Dict, List, Optional, Sequence
 
-import numpy
+import numpy as np
 import Pyro4
 from qtpy import QtCore, QtGui, QtWidgets
 
 import microscope.abc
-
 
 _logger = logging.getLogger(__name__)
 
@@ -87,10 +86,10 @@ class ControllerWidget(QtWidgets.QWidget):
         super().__init__(*args, **kwargs)
         self._device = device
 
-        self._button2window: typing.Dict[
-            QtWidgets.QPushButton, typing.Optional[QtWidgets.QMainWindow]
+        self._button2window: Dict[
+            QtWidgets.QPushButton, Optional[QtWidgets.QMainWindow]
         ] = {}
-        self._button2name: typing.Dict[QtWidgets.QPushButton, str] = {}
+        self._button2name: Dict[QtWidgets.QPushButton, str] = {}
 
         self._button_grp = QtWidgets.QButtonGroup(self)
         self._button_grp.setExclusive(False)
@@ -137,7 +136,7 @@ class _DataQueue(queue.Queue):
 class _Imager(QtCore.QObject):
     """Helper for CameraWidget handling the internals of the camera trigger."""
 
-    imageAcquired = QtCore.Signal(numpy.ndarray)
+    imageAcquired = QtCore.Signal(np.ndarray)
 
     def __init__(self, camera: microscope.abc.Camera) -> None:
         super().__init__()
@@ -188,7 +187,7 @@ class CameraWidget(QtWidgets.QWidget):
 
         self._view = QtWidgets.QLabel(parent=self)
         self.displayData(
-            numpy.zeros(self._device.get_sensor_shape(), dtype=numpy.uint8)
+            np.zeros(self._device.get_sensor_shape(), dtype=np.uint8)
         )
 
         self._enable_check = QtWidgets.QCheckBox("Enabled", parent=self)
@@ -233,10 +232,10 @@ class CameraWidget(QtWidgets.QWidget):
         self._snap_button.setEnabled(self._device.get_is_enabled())
         self._exposure_box.setEnabled(self._device.get_is_enabled())
 
-    def displayData(self, data: numpy.ndarray) -> None:
+    def displayData(self, data: np.ndarray) -> None:
         np_to_qt = {
-            numpy.dtype("uint8"): QtGui.QImage.Format_Grayscale8,
-            numpy.dtype("uint16"): QtGui.QImage.Format_Grayscale16,
+            np.dtype("uint8"): QtGui.QImage.Format_Grayscale8,
+            np.dtype("uint16"): QtGui.QImage.Format_Grayscale16,
         }
         qt_img = QtGui.QImage(
             data.tobytes(), *data.shape, np_to_qt[data.dtype]
@@ -258,8 +257,8 @@ class DeformableMirrorWidget(QtWidgets.QWidget):
         super().__init__(*args, **kwargs)
         self._device = device
 
-        self._pattern = numpy.ndarray(shape=(self._device.n_actuators))
-        self._actuators: typing.List[QtWidgets.QSlider] = []
+        self._pattern = np.ndarray(shape=(self._device.n_actuators))
+        self._actuators: List[QtWidgets.QSlider] = []
         for i in range(self._device.n_actuators):
             actuator = QtWidgets.QSlider(QtCore.Qt.Horizontal, parent=self)
             actuator.setMinimum(0)
@@ -484,7 +483,7 @@ def _guess_device_widget(device) -> QtWidgets.QWidget:
         raise TypeError("device is not a Microscope Device")
 
 
-def main(argv: typing.Sequence[str]) -> int:
+def main(argv: Sequence[str]) -> int:
     app = QtWidgets.QApplication(argv)
     app.setApplicationName("Microscope GUI")
     app.setOrganizationDomain("python-microscope.org")
