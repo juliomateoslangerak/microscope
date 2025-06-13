@@ -61,7 +61,7 @@ If installing under Linux be sure to follow the Linux installation tutorial
 import contextlib
 import enum
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Union, Tuple
 
 import numpy as np
 from ximea import xiapi, xidefs
@@ -291,7 +291,7 @@ class XimeaCamera(microscope.abc.Camera):
             return True
 
     def _get_setting_values(self, setting_name: str) -> \
-            typing.Optional[typing.Tuple[typing.Union[int, float, None], typing.Union[int, float, None]]]:
+            Optional[Tuple[Union[int, float, None], Union[int, float, None]]]:
         if self._is_setting_readonly(setting_name):
             return None, None
         else:
