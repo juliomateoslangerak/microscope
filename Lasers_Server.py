@@ -10,9 +10,11 @@ from microscope.filterwheels.ell_slider import ThorlabsELLSlider
 from microscope.lights.deepstar import DeepstarLaser
 from microscope.lights.obis import ObisLaser
 
+host = "localhost"
+
 DEVICES = [
-           device(DeepstarLaser, '10.6.19.21', 9011, conf={'com': 'COM9', 'baud': 9600, 'timeout': 0.5}),  # Deepstar 488
-           device(ObisLaser, '10.6.19.21', 9012, conf={'com': 'COM7', 'baud': 115200, 'timeout': 2.0}),  # Obis 561
-           device(ObisLaser, '10.6.19.21', 9013, conf={'com': 'COM16', 'baud': 115200, 'timeout': 2.0}),  # Obis 642
-           device(ThorlabsELLSlider, '10.6.19.21', 9014, conf={'com': 'COM17'})
+           # device(DeepstarLaser, host, 9011, conf={'com': 'COM10', 'baud': 9600, 'timeout': 0.5}),  # Deepstar 488
+           device(ObisLaser, host, 9012, conf={'com': 'COM11', 'baud': 115200, 'timeout': 2.0}),  # Obis 561
+           device(ObisLaser, host, 9013, conf={'com': 'COM12', 'baud': 115200, 'timeout': 2.0}),  # Obis 642
+           device(ThorlabsELLSlider, host, 9014, conf={'com': 'COM13'})
 ]
