@@ -27,14 +27,13 @@ import logging
 import re
 import threading
 import time
-import typing
 from typing import Dict, List, Mapping, Optional
 
 import serial
 
 import microscope._utils
 import microscope.abc
-from microscope import InitialiseError
+from microscope import InitialiseError, DeviceError
 
 _logger = logging.getLogger(__name__)
 
@@ -309,7 +308,7 @@ class _ASIMotionController:
                 elif line[0] == b"N":
                     # this is an error string
                     error = line[2:].strip()
-                    raise (
+                    raise DeviceError(
                         f"ASI controller error: {error},{_ASI_ERRORS[error]}"
                     )
         return output
@@ -317,7 +316,7 @@ class _ASIMotionController:
     def read_until_timeout(self) -> None:
         """Read until timeout; used to clean buffer if in an unknown state."""
         with self._lock:
-            self._serial.flushInput()
+            self._serial.reset_input_buffer()
             while self._serial.readline():
                 continue
 
@@ -416,12 +415,12 @@ class _ASIMotionController:
         flags = int(reply.strip()[3:])
         return flags & 1
 
-    def set_speed(self, axis: str, speed: int) -> None:
+    def set_speed(self, axis: str, speed: float) -> None:
         if axis not in self.axis_list:
             raise ValueError(
                 f"Axis {axis} not present. Verify the name of the axis or your configuration files."
             )
-        self.get_command(bytes(f"SPEED {axis}={speed}", "ascii"))
+        self.get_command(bytes(f"SPEED {axis}={speed:.6f}", "ascii"))
 
     def find_max_speed(self, axis: str):
         if axis not in self.axis_list:
@@ -455,7 +454,7 @@ class _ASIMotionController:
             )
         position = self.get_command(bytes(f"WHERE {axis}", "ascii"))
         if position[3:4] == b"N":
-            print(f"Error: {position} : {_ASI_ERRORS[int(position[4:6])]}")
+            raise DeviceError(f"Error: {position} : {_ASI_ERRORS[int(position[4:6])]}")
         else:
             return float(position.strip()[2:])
 
@@ -483,6 +482,7 @@ class _ASIStageAxis(microscope.abc.StageAxis):
         self.max_limit = 100000.0
         # As detailed in ASI manual set speed to 67% of max
         max_speed = self._dev_conn.find_max_speed(self._axis)
+        self.speed = None
         self.set_speed(max_speed * 0.67)
 
     def move_by(self, delta: float) -> None:
@@ -515,9 +515,9 @@ class _ASIStageAxis(microscope.abc.StageAxis):
         self.move_to(self.max_limit / 2)
         self._dev_conn.wait_for_motor_stop(self._axis)
 
-    def set_speed(self, speed: int) -> None:
-        self.speed = speed
+    def set_speed(self, speed: float) -> None:
         self._dev_conn.set_speed(self._axis, speed)
+        self.speed = speed
 
     def find_limits(self, speed=100):
         # drive axis to minimum pos, zero and then drive to max position
@@ -582,11 +582,11 @@ class _ASIStage(microscope.abc.Stage):
         elif answer[0] == "N":
             # this is an error string
             error = answer[2:]
-            raise Exception(
+            raise DeviceError(
                 f"ASI controller error on command {command}: {error},{_ASI_ERRORS[error]}"
             )
         else:
-            raise Exception(
+            raise DeviceError(
                 f"ASI controller error on command {command}: {answer}"
             )
 
@@ -703,9 +703,7 @@ class _ASILED(
         self._do_disable()
 
     def get_status(self) -> List[str]:
-        return (
-            super().get_status()
-        )  # TODO: Verify what am I doing here. Just copying from the Zaber led controller
+        return []
 
     def get_is_on(self) -> bool:
         return self._dev_conn.is_led_on(self._channel)
@@ -792,8 +790,11 @@ class ASIMS2000(microscope.abc.Controller):
         self._conn = _ASIController(port, baudrate, timeout)
         self._devices: Mapping[str, microscope.abc.Device] = {}
         self._devices["stage"] = _ASIStage(self._conn)
-        for light_ch, light in enumerate(kwargs["lights"]):
-            self._devices[light] = _ASILED(self._conn, light_ch)
+        try:
+            for light_ch, light in enumerate(kwargs["lights"]):
+                self._devices[light] = _ASILED(self._conn, light_ch)
+        except KeyError:
+            _logger.info("No lights defined for this controller")
 
     @property
     def devices(self) -> Mapping[str, microscope.abc.Device]:
