@@ -54,9 +54,6 @@ Version 0.7.0 (2024/01/10)
   * New :class:`DigitalIO <microscope.abc.DigitalIO>` ABC for devices
     with a series of Digital IO (DIO) lines.
 
-  * Cameras now have a property ``"shuttering_mode"`` for the type of
-    electronic shuttering mode (global or rolling).
-
 * New devices supported:
 
   * ASI MS 2000 controller
@@ -81,8 +78,6 @@ Version 0.7.0 (2024/01/10)
 
   * TSYS01 temperature sensor on RaspberryPi
     (:class:`microscope.valuelogger.raspberrypi.RPiValueLogger`)
-
-  * Thorlabs ELL sliders (:class:`microscope.filterwheels.ell_slider.ThorlabsELLSlider`)
 
 * Device specific changes:
 
