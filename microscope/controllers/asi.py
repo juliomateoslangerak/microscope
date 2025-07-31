@@ -196,29 +196,7 @@ def parse_info(info: List[str]) -> Dict[str, Dict[str, Optional[str]]]:
     return settings
 
 
-def parse_info(info: bytes) -> typing.Mapping[str, str]:
-    info = info.decode().strip()
-
-    items = []
-    for line in info.split('\r'):
-        items.append(line[:33].strip())
-        items.append(line[33:].strip())
-
-    pattern = "(?P<name>.*):\s*((?P<value>\S+)(\s+)?(?P<command>[[].*[]])?(\s+)?(?P<units>.*)?)$"
-
-    settings = {}
-    for item in items:
-        match = re.search(pattern, item)
-        settings[match.group('name').strip()] = {
-            'value': match.group('value'),
-            'command': None if not match.group('command') else match.group('command')[1:-1],
-            'units': match.group('units') if len(match.group('units')) else None,
-        }
-
-    return settings
-
-
-class _ASIMotionController:
+class _ASIController:
     """Connection to a ASI Controller and wrapper to its commands.
 
     Tested with MS2000 controller and xy stage.
