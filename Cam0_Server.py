@@ -4,6 +4,7 @@ from microscope.devices import device
 
 # Import required device classes
 from microscope.cameras.andorsdk3 import AndorSDK3
+from microscope.cameras.ximea import XimeaCamera
 
 
 # host is the IP address (or hostname) from where the device will be
@@ -12,15 +13,9 @@ from microscope.cameras.andorsdk3 import AndorSDK3
 # then it will be the IP address on that network.
 host = '10.6.19.30'
 
-#
-# def construct_camera_0() -> typing.Dict[str, device]:
-#     camera = AndorSDK3()
-#     camera.set_setting("trigger_mode", "External Exposure")
-#     return {"camera_0": camera}
-#
-#
 DEVICES = [
-    device(AndorSDK3, host, 8001, uid="VSC-01604")  # {'transform': (0, 1, 1)}),  # timeout=1, buffer_length=, index=0,
+    device(AndorSDK3, host, 8001, uid="VSC-01604"),  # {'transform': (0, 1, 1)}),  # timeout=1, buffer_length=, index=0,
+    device(XimeaCamera, host, 8010),  # {'transform': (0, 1, 1)}),  # timeout=1, buffer_length=, index=0,
     # device(TestCamera, host, 8005, otherargs=1,),
     # device(TestCamera, host, 8006, otherargs=1,),
     ]
