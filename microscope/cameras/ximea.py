@@ -284,7 +284,12 @@ class XimeaCamera(microscope.abc.Camera):
         # As far as I see, there is no other way to see if a setting is readonly apart from trying to change it
         # if a setter function is not implemented I assume it is a permanent readonly setting
         # Some cameras implement the "device_manifest" setting that returns a full description of the settings as a
-        # XML file. As this is not a standard feature I prefer to stick with this "less proper" way of defining this
+        # XML file. As this is not a standard feature I prefer to stick with this "less proper" way of defining this.
+        # I add some exceptions I encountered nevertheless
+        if name in [
+            "transport_pixel_format",  # This turns to be a read-only controlled by the pixelformat
+        ]:
+            return True
         if hasattr(self._handle, f"set_{name}"):
             return False
         else:
