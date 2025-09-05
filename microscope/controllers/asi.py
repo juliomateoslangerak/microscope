@@ -467,10 +467,7 @@ class _ASIStageAxis(microscope.abc.StageAxis):
         self._dev_conn.move_by_relative_position(self._axis, int(delta))
 
     def move_to(self, pos: float) -> None:
-        print("axis", self._axis)
-        print("go to ", pos)
         self._dev_conn.move_to_absolute_position(self._axis, int(pos))
-        print("got to ", self.position)
 
     @property
     def position(self) -> float:
@@ -505,18 +502,13 @@ class _ASIStageAxis(microscope.abc.StageAxis):
         # status byte
         self._dev_conn.wait_for_motor_stop(self._axis)
         # reset positon to zero.
-        print("axis", self._axis)
-        print("min=", self.position)
         self._dev_conn.reset_position(self._axis)
         self.min_limit = self.position
-        print("minpos", self.min_limit)
         self._dev_conn.homed = True
         # move to positive limit
         self._dev_conn.move_to_limit(self._axis, speed)
         self._dev_conn.wait_for_motor_stop(self._axis)
-        print("max=", self.position)
         self.max_limit = self.position
-        print(self.limits)
         return self.limits
 
 
@@ -633,11 +625,8 @@ class _ASIStage(microscope.abc.Stage):
         # unless we home it first.
         if not self.homed:
             axes = self.axes
-            print(axes)
             for axis in axes:
-                print(axis, self.axes[axis])
                 self.axes[axis].home()
-                print(axis, "homed")
             self.homed = True
         return True
 
@@ -658,7 +647,6 @@ class _ASIStage(microscope.abc.Stage):
 
     def move_to(self, position: Mapping[str, float]) -> None:
         """Move specified axes by the specified distance."""
-        print(position)
         for axis_name, axis_position in position.items():
             self._dev_conn.move_to_absolute_position(
                 axis_name, int(axis_position), wait=False
