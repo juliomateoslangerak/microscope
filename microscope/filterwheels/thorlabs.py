@@ -21,12 +21,14 @@ import io
 import string
 import threading
 import warnings
+import logging
 
 import serial
 
 import microscope
 import microscope.abc
 
+_logger = logging.getLogger(__name__)
 
 ELL_MODEL_TO_NR_POSITIONS = {"06": 2, "09": 4, "12": 6}
 
