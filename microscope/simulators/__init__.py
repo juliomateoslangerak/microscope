@@ -280,6 +280,9 @@ class SimulatedCamera(
         _logger.info("Acquisition enabled.")
         return True
 
+    def _get_shuttering_mode(self):
+        return microscope.ElectronicShutteringMode.GLOBAL
+
     def set_exposure_time(self, value):
         self._exposure_time = value
 
