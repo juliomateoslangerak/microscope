@@ -1290,6 +1290,7 @@ class FilterWheel(Device, metaclass=abc.ABCMeta):
     @position.setter
     def position(self, new_position: int) -> None:
         if 0 <= new_position < self.n_positions:
+            _logger.debug("Setting position to %d", new_position)
             return self._do_set_position(new_position)
         else:
             raise ValueError(
