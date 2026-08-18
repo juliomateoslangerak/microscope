@@ -55,11 +55,14 @@ class DeepstarLaser(
         # use 16-byte mode.
         self._write(b"S?")
         response = self._readline()
+        print(response)
         _logger.info("Current laser state: [%s]", response.decode())
 
         self._write(b"STAT3")
+        time.sleep(0.1)
         option_codes = self._readline()
         if not option_codes.startswith(b"OC "):
+            print(option_codes)
             raise microscope.DeviceError(
                 "Failed to get option codes '%s'" % option_codes.decode()
             )
@@ -72,13 +75,17 @@ class DeepstarLaser(
             )
             self._has_apc = False
 
+        # I'm having difficulties having a good connection with the laser. That delays a lot the repeated request for
+        # the current power readings. Whenever we change power we store it in this variable and dont' request the laser.
+        self._current_power = None
+
     def _write(self, command):
         """Send a command."""
         # We'll need to pad the command out to 16 bytes. There's also
         # a 7-byte mode but we never need to use it.  CR/LF counts
         # towards the byte limit, hence 14 (16-2)
         command = command.ljust(14) + b"\r\n"
-        time.sleep(.8)
+        time.sleep(.1)
         response = self.connection.write(command)
         return response
 
@@ -150,10 +157,13 @@ class DeepstarLaser(
         self._write(strPower.encode())
         response = self._readline()
         _logger.debug("Power response [%s]", response.decode())
+        self._current_power = power
 
     def _do_get_power(self) -> float:
-        if not self.get_is_on():
+        if not self.enabled:
             return 0.0
+        else:
+            return self._current_power
         if self._has_apc:
             query = b"P"
             scale = 0xCCC
