@@ -32,7 +32,7 @@ import serial
 
 import microscope._utils
 import microscope.abc
-from microscope import InitialiseError, DeviceError
+from microscope import DeviceError, InitialiseError
 
 _logger = logging.getLogger(__name__)
 

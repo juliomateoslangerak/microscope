@@ -27,7 +27,6 @@ import serial
 import microscope
 import microscope.abc
 
-
 ELL_MODEL_TO_NR_POSITIONS = {"06": 2, "09": 4, "12": 6}
 
 

@@ -140,7 +140,7 @@ class RPiDIO(microscope.abc.DigitalIO):
         # need to return data fetched from interupt driven state chnages.
         if self.inputQ.empty():
             return None
-        (line, state) = self.inputQ.get()
+        line, state = self.inputQ.get()
         _logger.info("Line %d chnaged to %s" % (line, str(state)))
         return (line, state)
 

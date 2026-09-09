@@ -61,7 +61,7 @@ If installing under Linux be sure to follow the Linux installation tutorial
 import contextlib
 import enum
 import logging
-from typing import Optional, Union, Tuple
+from typing import Optional, Tuple, Union
 
 import numpy as np
 from ximea import xiapi, xidefs
