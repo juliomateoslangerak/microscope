@@ -30,7 +30,6 @@ To configure and run as a Windows service use::
 
 """
 
-
 import logging
 import multiprocessing
 import os

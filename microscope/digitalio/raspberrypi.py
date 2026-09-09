@@ -19,8 +19,7 @@
 ## You should have received a copy of the GNU General Public License
 ## along with Microscope.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Raspberry Pi Digital IO module.
-"""
+"""Raspberry Pi Digital IO module."""
 
 import logging
 import queue
@@ -141,7 +140,7 @@ class RPiDIO(microscope.abc.DigitalIO):
         # need to return data fetched from interupt driven state chnages.
         if self.inputQ.empty():
             return None
-        (line, state) = self.inputQ.get()
+        line, state = self.inputQ.get()
         _logger.info("Line %d chnaged to %s" % (line, str(state)))
         return (line, state)
 

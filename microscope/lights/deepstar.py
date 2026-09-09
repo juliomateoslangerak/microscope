@@ -85,7 +85,7 @@ class DeepstarLaser(
         # a 7-byte mode but we never need to use it.  CR/LF counts
         # towards the byte limit, hence 14 (16-2)
         command = command.ljust(14) + b"\r\n"
-        time.sleep(.1)
+        time.sleep(0.1)
         response = self.connection.write(command)
         return response
 

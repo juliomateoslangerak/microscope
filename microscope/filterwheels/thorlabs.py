@@ -18,10 +18,10 @@
 ## along with Microscope.  If not, see <http://www.gnu.org/licenses/>.
 
 import io
+import logging
 import string
 import threading
 import warnings
-import logging
 
 import serial
 
