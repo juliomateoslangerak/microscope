@@ -18,6 +18,7 @@
 ## along with Microscope.  If not, see <http://www.gnu.org/licenses/>.
 
 import io
+import logging
 import string
 import threading
 import warnings
@@ -26,6 +27,8 @@ import serial
 
 import microscope
 import microscope.abc
+
+_logger = logging.getLogger(__name__)
 
 ELL_MODEL_TO_NR_POSITIONS = {"06": 2, "09": 4, "12": 6}
 
