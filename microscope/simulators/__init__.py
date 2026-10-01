@@ -165,7 +165,7 @@ class _ImageGenerator:
 class SimulatedCamera(
     microscope._utils.OnlyTriggersOnceOnSoftwareMixin, microscope.abc.Camera
 ):
-    def __init__(self, sensor_shape: Tuple[int, int] = (512, 512), **kwargs):
+    def __init__(self, sensor_shape: Tuple[int, int] = (1024, 1024), **kwargs):
         super().__init__(**kwargs)
         # Binning and ROI
         self._sensor_shape = sensor_shape
